@@ -101,6 +101,63 @@
     box-shadow: 0 0 0 3px var(--primary-dark);
   }
   .category-btn .cat-label { white-space: nowrap; }
+
+  .cat-manage-link {
+    display: block;
+    background: none;
+    color: var(--primary);
+    font-size: 0.8rem;
+    padding: 6px 0 0;
+    text-align: left;
+    font-weight: 500;
+  }
+
+  .category-manage-list {
+    max-height: 240px;
+    overflow-y: auto;
+    margin-bottom: 8px;
+  }
+  .category-manage-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .category-manage-row .icon-circle {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .category-manage-row .cat-manage-name {
+    flex: 1;
+    font-size: 0.9rem;
+  }
+  .category-manage-row button {
+    background: none;
+    font-size: 0.78rem;
+    padding: 4px 8px;
+    color: var(--primary);
+  }
+  .category-manage-row button.cat-delete-btn { color: var(--danger); }
+
+  .category-edit-row {
+    display: flex;
+    gap: 8px;
+  }
+  .category-edit-row input[type="text"]:last-child { flex: 1; }
+  #category-edit-icon { width: 64px; text-align: center; }
+  #category-edit-color {
+    width: 44px;
+    padding: 2px;
+    height: 42px;
+  }
   label {
     display: block;
     font-size: 0.8rem;
@@ -401,6 +458,26 @@
   </div>
 </div>
 
+<div id="category-modal-overlay" class="name-modal-overlay" style="display:none;">
+  <div class="name-modal">
+    <h2>カテゴリを編集</h2>
+    <div class="type-toggle" id="category-modal-type-toggle" style="margin-bottom:16px;">
+      <button type="button" class="type-btn active" data-type="支出">支出</button>
+      <button type="button" class="type-btn" data-type="収入">収入</button>
+    </div>
+    <div id="category-manage-list" class="category-manage-list"></div>
+
+    <h2 style="margin-top:20px; font-size:0.9rem;">新しいカテゴリを追加</h2>
+    <div class="category-edit-row">
+      <input type="text" id="category-edit-icon" placeholder="絵文字" maxlength="4">
+      <input type="color" id="category-edit-color" value="#4C78A8">
+      <input type="text" id="category-edit-name" placeholder="カテゴリ名">
+    </div>
+    <button type="button" id="category-edit-save" class="submit-btn" style="margin-top:10px;">追加する</button>
+    <button type="button" id="category-modal-close" class="cat-manage-link" style="margin-top:14px; width:100%; text-align:center;">閉じる</button>
+  </div>
+</div>
+
 <div class="container">
   <h1>かんたん家計簿</h1>
   <div class="sync-status" id="sync-status">読み込み中...</div>
@@ -429,6 +506,7 @@
         <label>カテゴリ</label>
         <div class="category-grid" id="category-grid"></div>
         <input type="hidden" id="category">
+        <button type="button" id="category-manage-btn" class="cat-manage-link">＋ カテゴリを追加・編集</button>
       </div>
       <div class="full">
         <label for="date">日付</label>
@@ -559,7 +637,8 @@
   };
 
   const STORAGE_KEY = 'kakeibo-expenses';
-  const EXPENSE_CATEGORIES = [
+  const CATEGORIES_KEY = 'kakeibo-categories';
+  const DEFAULT_EXPENSE_CATEGORIES = [
     { name: '食費', icon: '🍴', color: '#E53935' },
     { name: '日用品', icon: '🧴', color: '#7CB342' },
     { name: '交通費', icon: '🚃', color: '#1E88E5' },
@@ -569,7 +648,7 @@
     { name: '医療費', icon: '➕', color: '#D32F2F' },
     { name: 'その他', icon: '📦', color: '#757575' },
   ];
-  const INCOME_CATEGORIES = [
+  const DEFAULT_INCOME_CATEGORIES = [
     { name: '給与', icon: '💰', color: '#2E7D32' },
     { name: '賞与', icon: '🎁', color: '#43A047' },
     { name: 'お小遣い', icon: '👛', color: '#5E35B1' },
@@ -577,13 +656,56 @@
     { name: '臨時収入', icon: '🎉', color: '#FBC02D' },
     { name: 'その他', icon: '📦', color: '#757575' },
   ];
-  const CATEGORY_COLORS = Object.fromEntries(
-    [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => [c.name, c.color])
-  );
-  const CATEGORY_ICONS = Object.fromEntries(
-    [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => [c.name, c.icon])
-  );
   const DEFAULT_COLOR = '#9CA3AF';
+
+  function loadCategoriesLocal() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(CATEGORIES_KEY));
+      if (raw && Array.isArray(raw.expense) && Array.isArray(raw.income)) return raw;
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+  function persistCategoriesLocal(data) {
+    try {
+      localStorage.setItem(CATEGORIES_KEY, JSON.stringify(data));
+    } catch {
+      // ignore
+    }
+  }
+
+  const cachedCategories = loadCategoriesLocal();
+  let EXPENSE_CATEGORIES = cachedCategories
+    ? cachedCategories.expense
+    : DEFAULT_EXPENSE_CATEGORIES.map((c) => ({ ...c }));
+  let INCOME_CATEGORIES = cachedCategories
+    ? cachedCategories.income
+    : DEFAULT_INCOME_CATEGORIES.map((c) => ({ ...c }));
+
+  let CATEGORY_COLORS = {};
+  let CATEGORY_ICONS = {};
+
+  function rebuildCategoryLookups() {
+    CATEGORY_COLORS = Object.fromEntries(
+      [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => [c.name, c.color])
+    );
+    CATEGORY_ICONS = Object.fromEntries(
+      [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => [c.name, c.icon])
+    );
+  }
+  rebuildCategoryLookups();
+
+  let categoriesDoc = null;
+
+  function persistCategories() {
+    const data = { expense: EXPENSE_CATEGORIES, income: INCOME_CATEGORIES };
+    persistCategoriesLocal(data);
+    rebuildCategoryLookups();
+    if (categoriesDoc) {
+      categoriesDoc.set(data).catch((err) => console.error('categories write failed', err));
+    }
+  }
 
   function getCategoriesForType(type) {
     return type === '収入' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
@@ -634,6 +756,16 @@
   const sharedBarChart = document.getElementById('shared-bar-chart');
   const sharedBarEmpty = document.getElementById('shared-bar-empty');
 
+  const categoryManageBtn = document.getElementById('category-manage-btn');
+  const categoryModalOverlay = document.getElementById('category-modal-overlay');
+  const categoryModalTypeToggle = document.getElementById('category-modal-type-toggle');
+  const categoryManageList = document.getElementById('category-manage-list');
+  const categoryEditIcon = document.getElementById('category-edit-icon');
+  const categoryEditColor = document.getElementById('category-edit-color');
+  const categoryEditName = document.getElementById('category-edit-name');
+  const categoryEditSave = document.getElementById('category-edit-save');
+  const categoryModalClose = document.getElementById('category-modal-close');
+
   dateInput.value = new Date().toISOString().slice(0, 10);
 
   function baseCategoryName(name) {
@@ -667,6 +799,11 @@
 
   function renderCategoryGrid() {
     const categories = getCategoriesForType(typeInput.value);
+    if (categories.length === 0) {
+      categoryInput.value = '';
+      categoryGrid.innerHTML = '';
+      return;
+    }
     if (!categories.some((c) => c.name === categoryInput.value)) {
       categoryInput.value = categories[0].name;
     }
@@ -687,6 +824,107 @@
       categoryGrid.appendChild(btn);
     }
   }
+
+  let categoryModalType = '支出';
+  let editingCategoryName = null;
+
+  function resetCategoryEditForm() {
+    editingCategoryName = null;
+    categoryEditName.value = '';
+    categoryEditIcon.value = '';
+    categoryEditColor.value = '#4C78A8';
+    categoryEditSave.textContent = '追加する';
+  }
+
+  function renderCategoryManageList() {
+    const list = getCategoriesForType(categoryModalType);
+    categoryManageList.innerHTML = '';
+    for (const cat of list) {
+      const row = document.createElement('div');
+      row.className = 'category-manage-row';
+      row.innerHTML = `
+        <span class="icon-circle" style="background:${cat.color}">${cat.icon}</span>
+        <span class="cat-manage-name">${escapeHtml(cat.name)}</span>
+        <button type="button" class="cat-edit-btn" data-name="${escapeHtml(cat.name)}">編集</button>
+        <button type="button" class="cat-delete-btn" data-name="${escapeHtml(cat.name)}">削除</button>
+      `;
+      categoryManageList.appendChild(row);
+    }
+  }
+
+  function openCategoryModal() {
+    categoryModalType = typeInput.value === '収入' ? '収入' : '支出';
+    categoryModalTypeToggle.querySelectorAll('.type-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.type === categoryModalType);
+    });
+    resetCategoryEditForm();
+    renderCategoryManageList();
+    categoryModalOverlay.style.display = 'flex';
+  }
+
+  categoryManageBtn.addEventListener('click', openCategoryModal);
+
+  categoryModalClose.addEventListener('click', () => {
+    categoryModalOverlay.style.display = 'none';
+  });
+
+  categoryModalTypeToggle.querySelectorAll('.type-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      categoryModalType = btn.dataset.type;
+      categoryModalTypeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      resetCategoryEditForm();
+      renderCategoryManageList();
+    });
+  });
+
+  categoryEditSave.addEventListener('click', () => {
+    const name = categoryEditName.value.trim();
+    const icon = categoryEditIcon.value.trim() || '📌';
+    const color = categoryEditColor.value;
+    if (!name) return;
+
+    const list = getCategoriesForType(categoryModalType);
+
+    if (editingCategoryName) {
+      const idx = list.findIndex((c) => c.name === editingCategoryName);
+      if (idx !== -1) list[idx] = { name, icon, color };
+    } else {
+      if (list.some((c) => c.name === name)) return;
+      list.push({ name, icon, color });
+    }
+
+    persistCategories();
+    resetCategoryEditForm();
+    renderCategoryManageList();
+    renderCategoryGrid();
+    render();
+  });
+
+  categoryManageList.addEventListener('click', (e) => {
+    const name = e.target.dataset.name;
+    if (!name) return;
+    const list = getCategoriesForType(categoryModalType);
+
+    if (e.target.classList.contains('cat-edit-btn')) {
+      const cat = list.find((c) => c.name === name);
+      if (!cat) return;
+      editingCategoryName = name;
+      categoryEditName.value = cat.name;
+      categoryEditIcon.value = cat.icon;
+      categoryEditColor.value = cat.color;
+      categoryEditSave.textContent = '更新する';
+    } else if (e.target.classList.contains('cat-delete-btn')) {
+      if (list.length <= 1) return;
+      const idx = list.findIndex((c) => c.name === name);
+      if (idx === -1) return;
+      list.splice(idx, 1);
+      if (editingCategoryName === name) resetCategoryEditForm();
+      persistCategories();
+      renderCategoryManageList();
+      renderCategoryGrid();
+      render();
+    }
+  });
 
   typeToggle.querySelectorAll('.type-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -829,6 +1067,7 @@
       });
       expensesCollection = db.collection('expenses');
       peopleDoc = db.collection('meta').doc('people');
+      categoriesDoc = db.collection('meta').doc('categories');
 
       expensesCollection.onSnapshot(
         (snapshot) => {
@@ -853,6 +1092,27 @@
         },
         (error) => {
           console.error('people sync error', error);
+        }
+      );
+
+      categoriesDoc.onSnapshot(
+        (doc) => {
+          const data = doc.data();
+          if (data && Array.isArray(data.expense) && Array.isArray(data.income)) {
+            EXPENSE_CATEGORIES = data.expense;
+            INCOME_CATEGORIES = data.income;
+          } else {
+            // No categories stored in Firestore yet: seed it with this device's current list.
+            persistCategories();
+          }
+          persistCategoriesLocal({ expense: EXPENSE_CATEGORIES, income: INCOME_CATEGORIES });
+          rebuildCategoryLookups();
+          renderCategoryGrid();
+          if (categoryModalOverlay.style.display === 'flex') renderCategoryManageList();
+          render();
+        },
+        (error) => {
+          console.error('categories sync error', error);
         }
       );
     } catch (err) {
