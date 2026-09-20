@@ -45,6 +45,61 @@
     gap: 12px;
   }
   form .full { grid-column: 1 / -1; }
+
+  .type-toggle {
+    grid-column: 1 / -1;
+    display: flex;
+    border-radius: 999px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .type-toggle .type-btn {
+    flex: 1;
+    padding: 10px;
+    background: #fff;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.95rem;
+    border-radius: 0;
+  }
+  .type-toggle .type-btn.active[data-type="支出"] { background: var(--danger); color: #fff; }
+  .type-toggle .type-btn.active[data-type="収入"] { background: #2E7D32; color: #fff; }
+
+  .category-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px 6px;
+    margin-bottom: 4px;
+  }
+  .category-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    padding: 2px;
+    font-size: 0.72rem;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .category-btn .icon-circle {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.4rem;
+    color: #fff;
+    box-shadow: 0 0 0 3px transparent;
+    transition: box-shadow 0.15s ease;
+  }
+  .category-btn.selected .icon-circle {
+    box-shadow: 0 0 0 3px var(--primary-dark);
+  }
+  .category-btn .cat-label { white-space: nowrap; }
   label {
     display: block;
     font-size: 0.8rem;
@@ -80,20 +135,27 @@
   }
   .submit-btn:hover { background: var(--primary-dark); }
 
-  .total-box {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    text-align: center;
   }
-  .total-box .label {
+  .summary-item .label {
+    display: block;
     color: var(--muted);
-    font-size: 0.95rem;
+    font-size: 0.78rem;
+    margin-bottom: 4px;
   }
-  .total-box .amount {
-    font-size: 1.8rem;
+  .summary-item .amount {
+    font-size: 1.2rem;
     font-weight: 700;
-    color: var(--primary-dark);
+    color: var(--text);
   }
+  .summary-item.income .amount { color: #2E7D32; }
+  .summary-item.expense .amount { color: var(--danger); }
+  .summary-item.balance .amount { color: var(--primary-dark); }
+  .summary-item.balance .amount.negative { color: var(--danger); }
 
   table {
     width: 100%;
@@ -123,11 +185,13 @@
     display: inline-block;
     padding: 2px 8px;
     border-radius: 999px;
-    background: #eef3fc;
-    color: var(--primary-dark);
     font-size: 0.78rem;
     white-space: nowrap;
+    font-weight: 600;
   }
+  .amount-income { color: #2E7D32; }
+  .amount-expense { color: var(--text); }
+  .amount-cell.negative { color: var(--danger); }
   .delete-btn {
     background: transparent;
     color: var(--danger);
@@ -227,24 +291,21 @@
 
   <div class="card">
     <form id="expense-form">
+      <div class="type-toggle" id="type-toggle">
+        <button type="button" class="type-btn active" data-type="支出">支出</button>
+        <button type="button" class="type-btn" data-type="収入">収入</button>
+      </div>
+      <input type="hidden" id="type" value="支出">
       <div class="full">
         <label for="amount">金額(円)</label>
         <input type="number" id="amount" min="0" step="1" placeholder="1000" required>
       </div>
-      <div>
-        <label for="category">カテゴリ</label>
-        <select id="category">
-          <option>食費</option>
-          <option>日用品</option>
-          <option>交通費</option>
-          <option>交際費</option>
-          <option>趣味・娯楽</option>
-          <option>住居・水道光熱費</option>
-          <option>医療費</option>
-          <option>その他</option>
-        </select>
+      <div class="full">
+        <label>カテゴリ</label>
+        <div class="category-grid" id="category-grid"></div>
+        <input type="hidden" id="category">
       </div>
-      <div>
+      <div class="full">
         <label for="date">日付</label>
         <input type="date" id="date" required>
       </div>
@@ -259,14 +320,24 @@
         <option value="all">すべての期間</option>
       </select>
     </div>
-    <div class="total-box">
-      <span class="label">合計金額</span>
-      <span class="amount" id="total-amount">¥0</span>
+    <div class="summary-grid">
+      <div class="summary-item income">
+        <span class="label">収入</span>
+        <span class="amount" id="income-amount">¥0</span>
+      </div>
+      <div class="summary-item expense">
+        <span class="label">支出</span>
+        <span class="amount" id="expense-amount">¥0</span>
+      </div>
+      <div class="summary-item balance">
+        <span class="label">収支</span>
+        <span class="amount" id="balance-amount">¥0</span>
+      </div>
     </div>
   </div>
 
   <div class="card">
-    <h2>カテゴリ別の内訳</h2>
+    <h2>支出のカテゴリ別内訳</h2>
     <div class="chart-row" id="chart-row">
       <svg id="category-chart" width="180" height="180" viewBox="0 0 200 200"></svg>
       <ul class="legend" id="category-legend"></ul>
@@ -280,7 +351,9 @@
       <thead>
         <tr>
           <th>年月</th>
-          <th style="text-align:right;">合計金額</th>
+          <th style="text-align:right;">収入</th>
+          <th style="text-align:right;">支出</th>
+          <th style="text-align:right;">収支</th>
         </tr>
       </thead>
       <tbody id="month-summary"></tbody>
@@ -320,25 +393,48 @@
   };
 
   const STORAGE_KEY = 'kakeibo-expenses';
-  const CATEGORY_COLORS = {
-    '食費': '#4C78A8',
-    '日用品': '#F58518',
-    '交通費': '#54A24B',
-    '交際費': '#E45756',
-    '趣味・娯楽': '#72B7B2',
-    '住居・水道光熱費': '#EECA3B',
-    '医療費': '#B279A2',
-    'その他': '#9D755D',
-  };
+  const EXPENSE_CATEGORIES = [
+    { name: '食費', icon: '🍴', color: '#E53935' },
+    { name: '日用品', icon: '🧴', color: '#7CB342' },
+    { name: '交通費', icon: '🚃', color: '#1E88E5' },
+    { name: '交際費', icon: '☕', color: '#FB8C00' },
+    { name: '趣味・娯楽', icon: '🎮', color: '#26A69A' },
+    { name: '住居・水道光熱費', icon: '🏠', color: '#6D4C41' },
+    { name: '医療費', icon: '➕', color: '#D32F2F' },
+    { name: 'その他', icon: '📦', color: '#757575' },
+  ];
+  const INCOME_CATEGORIES = [
+    { name: '給与', icon: '💰', color: '#2E7D32' },
+    { name: '賞与', icon: '🎁', color: '#43A047' },
+    { name: 'お小遣い', icon: '👛', color: '#5E35B1' },
+    { name: '副業', icon: '💼', color: '#00897B' },
+    { name: '臨時収入', icon: '🎉', color: '#FBC02D' },
+    { name: 'その他', icon: '📦', color: '#757575' },
+  ];
+  const CATEGORY_COLORS = Object.fromEntries(
+    [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => [c.name, c.color])
+  );
+  const CATEGORY_ICONS = Object.fromEntries(
+    [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES].map((c) => [c.name, c.icon])
+  );
   const DEFAULT_COLOR = '#9CA3AF';
 
+  function getCategoriesForType(type) {
+    return type === '収入' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
+  }
+
   const form = document.getElementById('expense-form');
+  const typeToggle = document.getElementById('type-toggle');
+  const typeInput = document.getElementById('type');
   const amountInput = document.getElementById('amount');
+  const categoryGrid = document.getElementById('category-grid');
   const categoryInput = document.getElementById('category');
   const dateInput = document.getElementById('date');
   const monthFilter = document.getElementById('month-filter');
   const listBody = document.getElementById('expense-list');
-  const totalEl = document.getElementById('total-amount');
+  const incomeEl = document.getElementById('income-amount');
+  const expenseEl = document.getElementById('expense-amount');
+  const balanceEl = document.getElementById('balance-amount');
   const emptyMessage = document.getElementById('empty-message');
   const chartSvg = document.getElementById('category-chart');
   const chartLegend = document.getElementById('category-legend');
@@ -349,6 +445,39 @@
   const syncStatusEl = document.getElementById('sync-status');
 
   dateInput.value = new Date().toISOString().slice(0, 10);
+
+  function renderCategoryGrid() {
+    const categories = getCategoriesForType(typeInput.value);
+    if (!categories.some((c) => c.name === categoryInput.value)) {
+      categoryInput.value = categories[0].name;
+    }
+
+    categoryGrid.innerHTML = '';
+    for (const cat of categories) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'category-btn' + (cat.name === categoryInput.value ? ' selected' : '');
+      btn.innerHTML = `
+        <span class="icon-circle" style="background:${cat.color}">${cat.icon}</span>
+        <span class="cat-label">${cat.name}</span>
+      `;
+      btn.addEventListener('click', () => {
+        categoryInput.value = cat.name;
+        renderCategoryGrid();
+      });
+      categoryGrid.appendChild(btn);
+    }
+  }
+
+  typeToggle.querySelectorAll('.type-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      typeInput.value = btn.dataset.type;
+      typeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      renderCategoryGrid();
+    });
+  });
+
+  renderCategoryGrid();
 
   function loadExpenses() {
     try {
@@ -437,30 +566,46 @@
     }
   }
 
+  function typeOf(record) {
+    return record.type || '支出';
+  }
+
   function renderList(filtered) {
     const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
 
     listBody.innerHTML = '';
     emptyMessage.style.display = sorted.length === 0 ? 'block' : 'none';
 
-    for (const expense of sorted) {
+    for (const record of sorted) {
+      const type = typeOf(record);
+      const sign = type === '収入' ? '+' : '-';
+      const amountClass = type === '収入' ? 'amount-income' : 'amount-expense';
+      const color = CATEGORY_COLORS[record.category] || DEFAULT_COLOR;
+      const icon = CATEGORY_ICONS[record.category] || '';
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="date-cell">${expense.date}</td>
-        <td><span class="category-badge">${expense.category}</span></td>
-        <td class="amount-cell">${formatYen(expense.amount)}</td>
-        <td><button class="delete-btn" data-id="${expense.id}">削除</button></td>
+        <td class="date-cell">${record.date}</td>
+        <td><span class="category-badge" style="background:${color}22; color:${color}">${icon} ${record.category}</span></td>
+        <td class="amount-cell ${amountClass}">${sign}${formatYen(record.amount)}</td>
+        <td><button class="delete-btn" data-id="${record.id}">削除</button></td>
       `;
       listBody.appendChild(tr);
     }
 
-    const total = filtered.reduce((sum, e) => sum + e.amount, 0);
-    totalEl.textContent = formatYen(total);
+    const income = filtered.filter((e) => typeOf(e) === '収入').reduce((sum, e) => sum + e.amount, 0);
+    const expense = filtered.filter((e) => typeOf(e) === '支出').reduce((sum, e) => sum + e.amount, 0);
+    const balance = income - expense;
+
+    incomeEl.textContent = formatYen(income);
+    expenseEl.textContent = formatYen(expense);
+    balanceEl.textContent = (balance < 0 ? '-' : '') + formatYen(Math.abs(balance));
+    balanceEl.classList.toggle('negative', balance < 0);
   }
 
   function renderCategoryChart(filtered) {
+    const expenseOnly = filtered.filter((e) => typeOf(e) === '支出');
     const totalsByCategory = new Map();
-    for (const expense of filtered) {
+    for (const expense of expenseOnly) {
       totalsByCategory.set(expense.category, (totalsByCategory.get(expense.category) || 0) + expense.amount);
     }
 
@@ -523,9 +668,15 @@
 
   function renderMonthSummary() {
     const totalsByMonth = new Map();
-    for (const expense of expenses) {
-      const month = monthOf(expense.date);
-      totalsByMonth.set(month, (totalsByMonth.get(month) || 0) + expense.amount);
+    for (const record of expenses) {
+      const month = monthOf(record.date);
+      const entry = totalsByMonth.get(month) || { income: 0, expense: 0 };
+      if (typeOf(record) === '収入') {
+        entry.income += record.amount;
+      } else {
+        entry.expense += record.amount;
+      }
+      totalsByMonth.set(month, entry);
     }
 
     const months = [...totalsByMonth.entries()].sort((a, b) => b[0].localeCompare(a[0]));
@@ -533,11 +684,14 @@
     monthSummaryBody.innerHTML = '';
     monthEmpty.style.display = months.length === 0 ? 'block' : 'none';
 
-    for (const [month, total] of months) {
+    for (const [month, { income, expense }] of months) {
+      const balance = income - expense;
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="month-cell">${month.replace('-', '年')}月</td>
-        <td class="amount-cell">${formatYen(total)}</td>
+        <td class="amount-cell amount-income">${formatYen(income)}</td>
+        <td class="amount-cell amount-expense">${formatYen(expense)}</td>
+        <td class="amount-cell${balance < 0 ? ' negative' : ''}">${balance < 0 ? '-' : ''}${formatYen(Math.abs(balance))}</td>
       `;
       monthSummaryBody.appendChild(tr);
     }
@@ -561,6 +715,7 @@
       amount,
       category: categoryInput.value,
       date: dateInput.value,
+      type: typeInput.value,
     };
 
     if (expensesCollection) {
