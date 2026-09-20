@@ -216,16 +216,21 @@
     }
   }
 
-  function saveExpenses(expenses) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+  function persistExpenses() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+    } catch {
+      // localStorage unavailable in this environment; keep working in memory only.
+    }
   }
+
+  let expenses = loadExpenses();
 
   function formatYen(value) {
     return '¥' + value.toLocaleString('ja-JP');
   }
 
   function render() {
-    const expenses = loadExpenses();
     const sorted = [...expenses].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
 
     listBody.innerHTML = '';
@@ -251,14 +256,13 @@
     const amount = Number(amountInput.value);
     if (!amount || amount <= 0 || !dateInput.value) return;
 
-    const expenses = loadExpenses();
     expenses.push({
       id: Date.now(),
       amount,
       category: categoryInput.value,
       date: dateInput.value,
     });
-    saveExpenses(expenses);
+    persistExpenses();
 
     amountInput.value = '';
     amountInput.focus();
@@ -268,8 +272,8 @@
   listBody.addEventListener('click', (e) => {
     if (!e.target.classList.contains('delete-btn')) return;
     const id = Number(e.target.dataset.id);
-    const expenses = loadExpenses().filter((exp) => exp.id !== id);
-    saveExpenses(expenses);
+    expenses = expenses.filter((exp) => exp.id !== id);
+    persistExpenses();
     render();
   });
 
