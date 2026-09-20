@@ -65,6 +65,7 @@
   }
   .type-toggle .type-btn.active[data-type="支出"] { background: var(--danger); color: #fff; }
   .type-toggle .type-btn.active[data-type="収入"] { background: #2E7D32; color: #fff; }
+  .type-toggle .type-btn.active[data-type="2人の支出"] { background: #8E24AA; color: #fff; }
 
   .category-grid {
     grid-column: 1 / -1;
@@ -282,19 +283,117 @@
     color: var(--muted);
     margin: -12px 0 20px;
   }
+
+  .person-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: -12px 0 20px;
+  }
+  .person-bar strong { color: var(--text); }
+  .person-bar button {
+    background: none;
+    color: var(--primary);
+    font-size: 0.78rem;
+    padding: 2px 6px;
+    text-decoration: underline;
+    font-weight: 500;
+  }
+
+  .name-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    z-index: 100;
+  }
+  .name-modal {
+    background: #fff;
+    border-radius: 12px;
+    padding: 24px 20px;
+    max-width: 360px;
+    width: 100%;
+  }
+  .name-modal h2 { margin-top: 0; }
+  .name-modal p {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-top: -8px;
+  }
+  .name-option-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .name-option-btn {
+    background: #eef3fc;
+    color: var(--primary-dark);
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 1rem;
+  }
+  .name-new-row {
+    display: flex;
+    gap: 8px;
+  }
+  .name-new-row input {
+    flex: 1;
+  }
+  .name-new-row button {
+    background: var(--primary);
+    color: #fff;
+    padding: 0 16px;
+  }
+  .name-modal .full-note {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+
+  .shared-card { border: 2px solid #8E24AA22; }
+  .shared-card h2 { color: #8E24AA; }
+
+  .bar-chart-wrap { overflow-x: auto; }
 </style>
 </head>
 <body>
+<div id="name-modal-overlay" class="name-modal-overlay" style="display:none;">
+  <div class="name-modal">
+    <h2>あなたのお名前は?</h2>
+    <p>この端末での表示名を選んでください(あとで変更できます)</p>
+    <div class="name-option-list" id="name-option-list"></div>
+    <div class="name-new-row" id="name-new-row">
+      <input type="text" id="name-new-input" placeholder="新しく名前を登録">
+      <button type="button" id="name-new-submit">決定</button>
+    </div>
+    <p class="full-note" id="name-full-note" style="display:none;">すでに2人分登録されています。上の名前から選んでください。</p>
+  </div>
+</div>
+
 <div class="container">
   <h1>かんたん家計簿</h1>
   <div class="sync-status" id="sync-status">読み込み中...</div>
+  <div class="person-bar">
+    表示中: <strong id="current-person-label">-</strong>
+    <button type="button" id="change-person-btn">名前を変更</button>
+  </div>
 
   <div class="card">
     <form id="expense-form">
       <div class="type-toggle" id="type-toggle">
         <button type="button" class="type-btn active" data-type="支出">支出</button>
         <button type="button" class="type-btn" data-type="収入">収入</button>
+        <button type="button" class="type-btn" data-type="2人の支出">2人の支出</button>
       </div>
+      <p class="full" id="shared-hint" style="display:none; color:#8E24AA; font-size:0.78rem; margin:-4px 0 0;">
+        入力した金額は半分ずつ、お二人それぞれの個人の家計簿に自動で登録されます。
+      </p>
       <input type="hidden" id="type" value="支出">
       <div class="full">
         <label for="amount">金額(円)</label>
@@ -361,7 +460,44 @@
     <div class="empty" id="month-empty" style="display:none;">まだ記録がありません</div>
   </div>
 
+  <div class="card shared-card">
+    <h2>🤝 2人の支出</h2>
+    <div class="summary-grid" style="grid-template-columns: 1fr;">
+      <div class="summary-item expense">
+        <span class="label">合計(表示中の期間)</span>
+        <span class="amount" id="shared-total-amount">¥0</span>
+      </div>
+    </div>
+    <h2 style="margin-top:20px;">カテゴリ別の内訳</h2>
+    <div class="chart-row" id="shared-chart-row">
+      <svg id="shared-category-chart" width="180" height="180" viewBox="0 0 200 200"></svg>
+      <ul class="legend" id="shared-category-legend"></ul>
+    </div>
+    <div class="empty" id="shared-chart-empty" style="display:none;">この期間の記録がありません</div>
+
+    <h2 style="margin-top:20px;">月ごとの推移(全期間)</h2>
+    <div class="bar-chart-wrap">
+      <svg id="shared-bar-chart" height="180"></svg>
+    </div>
+    <div class="empty" id="shared-bar-empty" style="display:none;">まだ記録がありません</div>
+
+    <h2 style="margin-top:20px;">記録一覧</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>日付</th>
+          <th>カテゴリ</th>
+          <th style="text-align:right;">金額</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="shared-list"></tbody>
+    </table>
+    <div class="empty" id="shared-empty" style="display:none;">まだ記録がありません</div>
+  </div>
+
   <div class="card">
+    <h2 id="personal-list-heading">個人の記録一覧</h2>
     <table>
       <thead>
         <tr>
@@ -443,8 +579,39 @@
   const monthSummaryBody = document.getElementById('month-summary');
   const monthEmpty = document.getElementById('month-empty');
   const syncStatusEl = document.getElementById('sync-status');
+  const sharedHint = document.getElementById('shared-hint');
+  const personalListHeading = document.getElementById('personal-list-heading');
+
+  const nameModalOverlay = document.getElementById('name-modal-overlay');
+  const nameOptionList = document.getElementById('name-option-list');
+  const nameNewRow = document.getElementById('name-new-row');
+  const nameNewInput = document.getElementById('name-new-input');
+  const nameNewSubmit = document.getElementById('name-new-submit');
+  const nameFullNote = document.getElementById('name-full-note');
+  const currentPersonLabel = document.getElementById('current-person-label');
+  const changePersonBtn = document.getElementById('change-person-btn');
+
+  const sharedListBody = document.getElementById('shared-list');
+  const sharedEmpty = document.getElementById('shared-empty');
+  const sharedTotalEl = document.getElementById('shared-total-amount');
+  const sharedChartSvg = document.getElementById('shared-category-chart');
+  const sharedChartLegend = document.getElementById('shared-category-legend');
+  const sharedChartRow = document.getElementById('shared-chart-row');
+  const sharedChartEmpty = document.getElementById('shared-chart-empty');
+  const sharedBarChart = document.getElementById('shared-bar-chart');
+  const sharedBarEmpty = document.getElementById('shared-bar-empty');
 
   dateInput.value = new Date().toISOString().slice(0, 10);
+
+  function baseCategoryName(name) {
+    return name.endsWith('(2人)') ? name.slice(0, -4) : name;
+  }
+  function colorForCategory(name) {
+    return CATEGORY_COLORS[baseCategoryName(name)] || DEFAULT_COLOR;
+  }
+  function iconForCategory(name) {
+    return CATEGORY_ICONS[baseCategoryName(name)] || '';
+  }
 
   function renderCategoryGrid() {
     const categories = getCategoriesForType(typeInput.value);
@@ -473,6 +640,7 @@
     btn.addEventListener('click', () => {
       typeInput.value = btn.dataset.type;
       typeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      sharedHint.style.display = btn.dataset.type === '2人の支出' ? 'block' : 'none';
       renderCategoryGrid();
     });
   });
@@ -497,21 +665,115 @@
 
   let expenses = loadExpenses();
 
+  const PERSON_KEY = 'kakeibo-person';
+  const PEOPLE_KEY = 'kakeibo-people';
+
+  function loadPeopleLocal() {
+    try {
+      return JSON.parse(localStorage.getItem(PEOPLE_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+  function persistPeopleLocal(list) {
+    try {
+      localStorage.setItem(PEOPLE_KEY, JSON.stringify(list));
+    } catch {
+      // ignore
+    }
+  }
+  function loadPersonLocal() {
+    try {
+      return localStorage.getItem(PERSON_KEY) || '';
+    } catch {
+      return '';
+    }
+  }
+  function persistPersonLocal(name) {
+    try {
+      localStorage.setItem(PERSON_KEY, name);
+    } catch {
+      // ignore
+    }
+  }
+
+  let people = loadPeopleLocal();
+  let currentPerson = loadPersonLocal();
+  let peopleDoc = null;
+
+  function persistPeople(list) {
+    people = list;
+    persistPeopleLocal(list);
+    if (peopleDoc) {
+      peopleDoc.set({ names: list }).catch((err) => console.error('people write failed', err));
+    }
+  }
+
+  function renderPersonUI() {
+    currentPersonLabel.textContent = currentPerson || '未設定';
+    personalListHeading.textContent = (currentPerson || '個人') + 'の記録一覧';
+  }
+
+  function openNameModal() {
+    nameOptionList.innerHTML = '';
+    for (const name of people) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'name-option-btn';
+      btn.textContent = name;
+      btn.addEventListener('click', () => selectPerson(name));
+      nameOptionList.appendChild(btn);
+    }
+    const canAddNew = people.length < 2;
+    nameNewRow.style.display = canAddNew ? 'flex' : 'none';
+    nameFullNote.style.display = canAddNew ? 'none' : 'block';
+    nameModalOverlay.style.display = 'flex';
+  }
+
+  function closeNameModal() {
+    nameModalOverlay.style.display = 'none';
+  }
+
+  function selectPerson(name) {
+    currentPerson = name;
+    persistPersonLocal(name);
+    if (!people.includes(name)) {
+      persistPeople([...people, name]);
+    }
+    closeNameModal();
+    renderPersonUI();
+    render();
+  }
+
+  nameNewSubmit.addEventListener('click', () => {
+    const name = nameNewInput.value.trim();
+    if (!name) return;
+    if (people.length >= 2 && !people.includes(name)) return;
+    nameNewInput.value = '';
+    selectPerson(name);
+  });
+
+  changePersonBtn.addEventListener('click', () => {
+    openNameModal();
+  });
+
   function setSyncStatus(text) {
     syncStatusEl.textContent = text;
   }
 
   let expensesCollection = null;
+  let db = null;
   const isFirebaseConfigured = firebaseConfig.apiKey !== 'YOUR_API_KEY';
 
   if (isFirebaseConfigured) {
     try {
       firebase.initializeApp(firebaseConfig);
-      const db = firebase.firestore();
+      db = firebase.firestore();
       db.enablePersistence({ synchronizeTabs: true }).catch(() => {
         // multiple tabs or unsupported browser; safe to ignore.
       });
       expensesCollection = db.collection('expenses');
+      peopleDoc = db.collection('meta').doc('people');
 
       expensesCollection.onSnapshot(
         (snapshot) => {
@@ -523,6 +785,18 @@
         (error) => {
           console.error('Firestore sync error', error);
           setSyncStatus('🟡 オフライン(このデバイスの記録のみ表示中)');
+        }
+      );
+
+      peopleDoc.onSnapshot(
+        (doc) => {
+          const data = doc.data();
+          people = (data && data.names) || [];
+          persistPeopleLocal(people);
+          if (nameModalOverlay.style.display === 'flex') openNameModal();
+        },
+        (error) => {
+          console.error('people sync error', error);
         }
       );
     } catch (err) {
@@ -542,9 +816,24 @@
     return dateStr.slice(0, 7);
   }
 
+  function getPersonalExpenses() {
+    return expenses.filter((e) => !e.shared && e.person === currentPerson);
+  }
+
+  function getSharedExpenses() {
+    return expenses.filter((e) => e.shared);
+  }
+
   function getFilteredExpenses() {
-    if (monthFilter.value === 'all') return expenses;
-    return expenses.filter((e) => monthOf(e.date) === monthFilter.value);
+    const personal = getPersonalExpenses();
+    if (monthFilter.value === 'all') return personal;
+    return personal.filter((e) => monthOf(e.date) === monthFilter.value);
+  }
+
+  function getFilteredSharedExpenses() {
+    const shared = getSharedExpenses();
+    if (monthFilter.value === 'all') return shared;
+    return shared.filter((e) => monthOf(e.date) === monthFilter.value);
   }
 
   function renderMonthFilterOptions() {
@@ -580,8 +869,8 @@
       const type = typeOf(record);
       const sign = type === '収入' ? '+' : '-';
       const amountClass = type === '収入' ? 'amount-income' : 'amount-expense';
-      const color = CATEGORY_COLORS[record.category] || DEFAULT_COLOR;
-      const icon = CATEGORY_ICONS[record.category] || '';
+      const color = colorForCategory(record.category);
+      const icon = iconForCategory(record.category);
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="date-cell">${record.date}</td>
@@ -602,26 +891,25 @@
     balanceEl.classList.toggle('negative', balance < 0);
   }
 
-  function renderCategoryChart(filtered) {
-    const expenseOnly = filtered.filter((e) => typeOf(e) === '支出');
+  function renderPieChart(records, els) {
     const totalsByCategory = new Map();
-    for (const expense of expenseOnly) {
-      totalsByCategory.set(expense.category, (totalsByCategory.get(expense.category) || 0) + expense.amount);
+    for (const record of records) {
+      totalsByCategory.set(record.category, (totalsByCategory.get(record.category) || 0) + record.amount);
     }
 
     const entries = [...totalsByCategory.entries()].sort((a, b) => b[1] - a[1]);
     const grandTotal = entries.reduce((sum, [, amount]) => sum + amount, 0);
 
-    chartSvg.innerHTML = '';
-    chartLegend.innerHTML = '';
+    els.svg.innerHTML = '';
+    els.legend.innerHTML = '';
 
     if (grandTotal === 0) {
-      chartRow.style.display = 'none';
-      chartEmpty.style.display = 'block';
+      els.row.style.display = 'none';
+      els.empty.style.display = 'block';
       return;
     }
-    chartRow.style.display = 'flex';
-    chartEmpty.style.display = 'none';
+    els.row.style.display = 'flex';
+    els.empty.style.display = 'none';
 
     const radius = 70;
     const strokeWidth = 32;
@@ -629,7 +917,7 @@
     let offset = 0;
 
     for (const [category, amount] of entries) {
-      const color = CATEGORY_COLORS[category] || DEFAULT_COLOR;
+      const color = colorForCategory(category);
       const length = (amount / grandTotal) * circumference;
 
       const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -642,7 +930,7 @@
       circle.setAttribute('stroke-dasharray', `${length} ${circumference - length}`);
       circle.setAttribute('stroke-dashoffset', String(-offset));
       circle.setAttribute('transform', 'rotate(-90 100 100)');
-      chartSvg.appendChild(circle);
+      els.svg.appendChild(circle);
 
       offset += length;
 
@@ -652,7 +940,7 @@
         <span class="legend-name"><span class="swatch" style="background:${color}"></span>${category}</span>
         <span class="legend-value"><strong>${formatYen(amount)}</strong> (${percent}%)</span>
       `;
-      chartLegend.appendChild(li);
+      els.legend.appendChild(li);
     }
 
     const centerText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -663,12 +951,13 @@
     centerText.setAttribute('font-weight', '700');
     centerText.setAttribute('fill', '#2b2f36');
     centerText.textContent = formatYen(grandTotal);
-    chartSvg.appendChild(centerText);
+    els.svg.appendChild(centerText);
   }
 
   function renderMonthSummary() {
+    const personal = getPersonalExpenses();
     const totalsByMonth = new Map();
-    for (const record of expenses) {
+    for (const record of personal) {
       const month = monthOf(record.date);
       const entry = totalsByMonth.get(month) || { income: 0, expense: 0 };
       if (typeOf(record) === '収入') {
@@ -697,12 +986,163 @@
     }
   }
 
+  function renderSharedList(filteredShared) {
+    const sorted = [...filteredShared].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+    sharedListBody.innerHTML = '';
+    sharedEmpty.style.display = sorted.length === 0 ? 'block' : 'none';
+
+    for (const record of sorted) {
+      const color = colorForCategory(record.category);
+      const icon = iconForCategory(record.category);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="date-cell">${record.date}</td>
+        <td><span class="category-badge" style="background:${color}22; color:${color}">${icon} ${record.category}</span></td>
+        <td class="amount-cell amount-expense">${formatYen(record.amount)}</td>
+        <td><button class="delete-btn" data-id="${record.id}">削除</button></td>
+      `;
+      sharedListBody.appendChild(tr);
+    }
+
+    const total = filteredShared.reduce((sum, e) => sum + e.amount, 0);
+    sharedTotalEl.textContent = formatYen(total);
+  }
+
+  function renderSharedBarChart() {
+    const all = getSharedExpenses();
+    const totalsByMonth = new Map();
+    for (const record of all) {
+      const month = monthOf(record.date);
+      totalsByMonth.set(month, (totalsByMonth.get(month) || 0) + record.amount);
+    }
+
+    const months = [...totalsByMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+
+    sharedBarChart.innerHTML = '';
+
+    if (months.length === 0) {
+      sharedBarChart.style.display = 'none';
+      sharedBarEmpty.style.display = 'block';
+      return;
+    }
+    sharedBarChart.style.display = 'block';
+    sharedBarEmpty.style.display = 'none';
+
+    const barWidth = 40;
+    const gap = 20;
+    const chartHeight = 110;
+    const topMargin = 24;
+    const bottomMargin = 30;
+    const svgHeight = topMargin + chartHeight + bottomMargin;
+    const svgWidth = months.length * (barWidth + gap) + gap;
+    const max = Math.max(...months.map(([, v]) => v), 1);
+
+    sharedBarChart.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+    sharedBarChart.setAttribute('width', String(svgWidth));
+    sharedBarChart.setAttribute('height', String(svgHeight));
+
+    months.forEach(([month, amount], i) => {
+      const barHeight = (amount / max) * chartHeight;
+      const x = gap + i * (barWidth + gap);
+      const y = topMargin + (chartHeight - barHeight);
+
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', String(x));
+      rect.setAttribute('y', String(y));
+      rect.setAttribute('width', String(barWidth));
+      rect.setAttribute('height', String(barHeight));
+      rect.setAttribute('rx', '4');
+      rect.setAttribute('fill', '#8E24AA');
+      sharedBarChart.appendChild(rect);
+
+      const valueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      valueText.setAttribute('x', String(x + barWidth / 2));
+      valueText.setAttribute('y', String(Math.max(y - 6, 12)));
+      valueText.setAttribute('text-anchor', 'middle');
+      valueText.setAttribute('font-size', '11');
+      valueText.setAttribute('fill', '#2b2f36');
+      valueText.textContent = formatYen(amount);
+      sharedBarChart.appendChild(valueText);
+
+      const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      labelText.setAttribute('x', String(x + barWidth / 2));
+      labelText.setAttribute('y', String(topMargin + chartHeight + 20));
+      labelText.setAttribute('text-anchor', 'middle');
+      labelText.setAttribute('font-size', '11');
+      labelText.setAttribute('fill', '#6b7280');
+      labelText.textContent = month.replace('-', '/');
+      sharedBarChart.appendChild(labelText);
+    });
+  }
+
+  function renderSharedSection() {
+    const filteredShared = getFilteredSharedExpenses();
+    renderSharedList(filteredShared);
+    renderPieChart(filteredShared, {
+      svg: sharedChartSvg,
+      legend: sharedChartLegend,
+      row: sharedChartRow,
+      empty: sharedChartEmpty,
+    });
+    renderSharedBarChart();
+  }
+
   function render() {
     renderMonthFilterOptions();
     const filtered = getFilteredExpenses();
     renderList(filtered);
-    renderCategoryChart(filtered);
+    renderPieChart(filtered.filter((e) => typeOf(e) === '支出'), {
+      svg: chartSvg,
+      legend: chartLegend,
+      row: chartRow,
+      empty: chartEmpty,
+    });
     renderMonthSummary();
+    renderSharedSection();
+  }
+
+  function writeRecords(records) {
+    if (expensesCollection) {
+      const batch = db.batch();
+      for (const record of records) {
+        batch.set(expensesCollection.doc(String(record.id)), record);
+      }
+      batch.commit().catch((err) => console.error('Firestore batch write failed', err));
+    } else {
+      expenses.push(...records);
+      persistExpenses();
+      render();
+    }
+  }
+
+  function deleteRecordCascade(id) {
+    const target = expenses.find((e) => e.id === id);
+    if (!target) return;
+
+    let idsToDelete = [id];
+    if (target.shared) {
+      idsToDelete = idsToDelete.concat(
+        expenses.filter((e) => e.splitGroupId === id).map((e) => e.id)
+      );
+    } else if (target.splitGroupId != null) {
+      const groupId = target.splitGroupId;
+      idsToDelete = expenses
+        .filter((e) => e.id === groupId || e.splitGroupId === groupId)
+        .map((e) => e.id);
+    }
+
+    if (expensesCollection) {
+      const batch = db.batch();
+      for (const delId of idsToDelete) {
+        batch.delete(expensesCollection.doc(String(delId)));
+      }
+      batch.commit().catch((err) => console.error('Firestore cascade delete failed', err));
+    } else {
+      expenses = expenses.filter((e) => !idsToDelete.includes(e.id));
+      persistExpenses();
+      render();
+    }
   }
 
   form.addEventListener('submit', (e) => {
@@ -710,22 +1150,59 @@
     const amount = Number(amountInput.value);
     if (!amount || amount <= 0 || !dateInput.value) return;
 
-    const expense = {
-      id: Date.now(),
-      amount,
-      category: categoryInput.value,
-      date: dateInput.value,
-      type: typeInput.value,
-    };
+    const selectedType = typeInput.value;
+    const category = categoryInput.value;
 
-    if (expensesCollection) {
-      expensesCollection.doc(String(expense.id)).set(expense).catch((err) => {
-        console.error('Firestore write failed', err);
-      });
+    if (selectedType === '2人の支出') {
+      if (people.length < 2) {
+        alert('先にお二人とも名前を登録してください(現在登録済み: ' + (people.join('、') || 'まだ0人') + ')');
+        return;
+      }
+
+      const sharedId = Date.now();
+      const half1 = Math.ceil(amount / 2);
+      const half2 = amount - half1;
+
+      const sharedRecord = {
+        id: sharedId,
+        amount,
+        category,
+        date: dateInput.value,
+        type: '支出',
+        shared: true,
+      };
+      const childRecords = [
+        {
+          id: sharedId + 1,
+          amount: half1,
+          category: category + '(2人)',
+          date: dateInput.value,
+          type: '支出',
+          person: people[0],
+          splitGroupId: sharedId,
+        },
+        {
+          id: sharedId + 2,
+          amount: half2,
+          category: category + '(2人)',
+          date: dateInput.value,
+          type: '支出',
+          person: people[1],
+          splitGroupId: sharedId,
+        },
+      ];
+
+      writeRecords([sharedRecord, ...childRecords]);
     } else {
-      expenses.push(expense);
-      persistExpenses();
-      render();
+      const record = {
+        id: Date.now(),
+        amount,
+        category,
+        date: dateInput.value,
+        type: selectedType,
+        person: currentPerson,
+      };
+      writeRecords([record]);
     }
 
     amountInput.value = '';
@@ -734,24 +1211,30 @@
 
   listBody.addEventListener('click', (e) => {
     if (!e.target.classList.contains('delete-btn')) return;
-    const id = Number(e.target.dataset.id);
+    deleteRecordCascade(Number(e.target.dataset.id));
+  });
 
-    if (expensesCollection) {
-      expensesCollection.doc(String(id)).delete().catch((err) => {
-        console.error('Firestore delete failed', err);
-      });
-    } else {
-      expenses = expenses.filter((exp) => exp.id !== id);
-      persistExpenses();
-      render();
-    }
+  sharedListBody.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('delete-btn')) return;
+    deleteRecordCascade(Number(e.target.dataset.id));
   });
 
   monthFilter.addEventListener('change', () => {
     const filtered = getFilteredExpenses();
     renderList(filtered);
-    renderCategoryChart(filtered);
+    renderPieChart(filtered.filter((e) => typeOf(e) === '支出'), {
+      svg: chartSvg,
+      legend: chartLegend,
+      row: chartRow,
+      empty: chartEmpty,
+    });
+    renderSharedSection();
   });
+
+  renderPersonUI();
+  if (!currentPerson) {
+    openNameModal();
+  }
 
   render();
 </script>
