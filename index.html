@@ -378,18 +378,12 @@
 
   .shared-warning {
     grid-column: 1 / -1;
-    background: #FFF3E0;
-    color: #E65100;
+    background: #E3F2FD;
+    color: #1565C0;
     font-size: 0.8rem;
     padding: 10px 12px;
     border-radius: 8px;
     margin: -4px 0 0;
-  }
-
-  .submit-btn:disabled {
-    background: var(--border);
-    color: var(--muted);
-    cursor: not-allowed;
   }
 </style>
 </head>
@@ -660,17 +654,14 @@
   function updateSharedAvailability() {
     if (typeInput.value !== '2人の支出') {
       sharedWarning.style.display = 'none';
-      submitBtn.disabled = false;
       return;
     }
     if (people.length < 2) {
       sharedWarning.textContent =
-        '⚠️ もう一人分の名前が登録されるまで使えません(現在登録済み: ' + (people.join('、') || 'まだ0人') + ')';
+        'ℹ️ もう一人がまだ未登録のため、今はあなた(' + (people[0] || '') + ')の分だけ半額で登録されます。';
       sharedWarning.style.display = 'block';
-      submitBtn.disabled = true;
     } else {
       sharedWarning.style.display = 'none';
-      submitBtn.disabled = false;
     }
   }
 
@@ -813,6 +804,7 @@
     if (!name) return;
     if (people.length >= 2 && !people.includes(name)) return;
     nameNewInput.value = '';
+    nameNewInput.blur();
     selectPerson(name);
   });
 
@@ -1243,14 +1235,10 @@
     const memo = memoInput.value.trim();
 
     if (selectedType === '2人の支出') {
-      if (people.length < 2) {
-        updateSharedAvailability();
-        return;
-      }
-
       const sharedId = Date.now();
       const half1 = Math.ceil(amount / 2);
       const half2 = amount - half1;
+      const halves = [half1, half2];
 
       const sharedRecord = {
         id: sharedId,
@@ -1261,28 +1249,18 @@
         shared: true,
         memo,
       };
-      const childRecords = [
-        {
-          id: sharedId + 1,
-          amount: half1,
-          category: category + '(2人)',
-          date: dateInput.value,
-          type: '支出',
-          person: people[0],
-          splitGroupId: sharedId,
-          memo,
-        },
-        {
-          id: sharedId + 2,
-          amount: half2,
-          category: category + '(2人)',
-          date: dateInput.value,
-          type: '支出',
-          person: people[1],
-          splitGroupId: sharedId,
-          memo,
-        },
-      ];
+      // Split between whichever names are registered so far (1 or 2); the
+      // other half stays counted in the shared total until a second person joins.
+      const childRecords = people.slice(0, 2).map((personName, i) => ({
+        id: sharedId + i + 1,
+        amount: halves[i],
+        category: category + '(2人)',
+        date: dateInput.value,
+        type: '支出',
+        person: personName,
+        splitGroupId: sharedId,
+        memo,
+      }));
 
       writeRecords([sharedRecord, ...childRecords]);
     } else {
@@ -1300,7 +1278,7 @@
 
     amountInput.value = '';
     memoInput.value = '';
-    amountInput.focus();
+    if (document.activeElement) document.activeElement.blur();
   });
 
   listBody.addEventListener('click', (e) => {
