@@ -13,20 +13,25 @@
 <meta name="apple-mobile-web-app-title" content="家計簿">
 <style>
   :root {
-    --bg: #f4f6f8;
+    --bg: #f2edff;
     --card-bg: #ffffff;
-    --primary: #3f7fd6;
-    --primary-dark: #2f63ab;
+    --primary: #7C4DFF;
+    --primary-dark: #5E35B1;
+    --accent: #FF4081;
     --text: #2b2f36;
-    --muted: #6b7280;
-    --border: #e2e6ea;
-    --danger: #e0554f;
+    --muted: #7c7f96;
+    --border: #ece7fb;
+    --danger: #F4436C;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: "Hiragino Kaku Gothic ProN", "Meiryo", "Segoe UI", sans-serif;
-    background: var(--bg);
+    background:
+      radial-gradient(circle at 10% 0%, #ffe3f3 0%, transparent 45%),
+      radial-gradient(circle at 90% 15%, #e0e7ff 0%, transparent 45%),
+      var(--bg);
+    background-attachment: fixed;
     color: var(--text);
     padding: 24px 16px 60px;
   }
@@ -36,15 +41,23 @@
   }
   h1 {
     text-align: center;
-    font-size: 1.5rem;
-    margin-bottom: 20px;
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 20px;
+    padding: 14px 20px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #7C4DFF, #FF4081);
+    box-shadow: 0 8px 20px -6px rgba(124, 77, 255, 0.55);
+    letter-spacing: 0.02em;
   }
   .card {
     background: var(--card-bg);
-    border-radius: 12px;
+    border-radius: 20px;
     padding: 20px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    box-shadow: 0 6px 20px -8px rgba(124, 77, 255, 0.18);
     margin-bottom: 20px;
+    border: 1px solid var(--border);
   }
   form {
     display: grid;
@@ -56,23 +69,40 @@
   .type-toggle {
     grid-column: 1 / -1;
     display: flex;
+    gap: 6px;
     border-radius: 999px;
-    overflow: hidden;
-    border: 1px solid var(--border);
+    background: #f3f0fb;
+    padding: 5px;
     margin-bottom: 4px;
   }
   .type-toggle .type-btn {
     flex: 1;
     padding: 10px;
-    background: #fff;
+    background: transparent;
     color: var(--muted);
-    font-weight: 600;
-    font-size: 0.95rem;
-    border-radius: 0;
+    font-weight: 700;
+    font-size: 0.92rem;
+    border-radius: 999px;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
-  .type-toggle .type-btn.active[data-type="支出"] { background: var(--danger); color: #fff; }
-  .type-toggle .type-btn.active[data-type="収入"] { background: #2E7D32; color: #fff; }
-  .type-toggle .type-btn.active[data-type="2人の支出"] { background: #8E24AA; color: #fff; }
+  .type-toggle .type-btn.active[data-type="支出"] {
+    background: linear-gradient(135deg, #FF6B9D, var(--danger));
+    color: #fff;
+    box-shadow: 0 4px 12px -4px rgba(244, 67, 108, 0.6);
+    transform: translateY(-1px);
+  }
+  .type-toggle .type-btn.active[data-type="収入"] {
+    background: linear-gradient(135deg, #4ADE80, #2E7D32);
+    color: #fff;
+    box-shadow: 0 4px 12px -4px rgba(46, 125, 50, 0.5);
+    transform: translateY(-1px);
+  }
+  .type-toggle .type-btn.active[data-type="2人の支出"] {
+    background: linear-gradient(135deg, #B388FF, #8E24AA);
+    color: #fff;
+    box-shadow: 0 4px 12px -4px rgba(142, 36, 170, 0.5);
+    transform: translateY(-1px);
+  }
 
   .category-grid {
     grid-column: 1 / -1;
@@ -93,30 +123,31 @@
     font-weight: 500;
   }
   .category-btn .icon-circle {
-    width: 52px;
-    height: 52px;
+    width: 54px;
+    height: 54px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     color: #fff;
-    box-shadow: 0 0 0 3px transparent;
-    transition: box-shadow 0.15s ease;
+    box-shadow: 0 4px 10px -4px rgba(0,0,0,0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
   }
   .category-btn.selected .icon-circle {
-    box-shadow: 0 0 0 3px var(--primary-dark);
+    box-shadow: 0 0 0 3px var(--primary-dark), 0 6px 14px -4px rgba(0,0,0,0.4);
+    transform: scale(1.1);
   }
-  .category-btn .cat-label { white-space: nowrap; }
+  .category-btn .cat-label { white-space: nowrap; font-weight: 600; }
 
   .cat-manage-link {
     display: block;
     background: none;
-    color: var(--primary);
+    color: var(--accent);
     font-size: 0.8rem;
     padding: 6px 0 0;
     text-align: left;
-    font-weight: 500;
+    font-weight: 700;
   }
 
   .category-manage-list {
@@ -169,16 +200,18 @@
     display: block;
     font-size: 0.8rem;
     color: var(--muted);
+    font-weight: 600;
     margin-bottom: 4px;
   }
   input, select {
     width: 100%;
-    padding: 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    padding: 11px 12px;
+    border: 2px solid var(--border);
+    border-radius: 12px;
     font-size: 1rem;
-    background: #fff;
+    background: #fbfaff;
     color: var(--text);
+    transition: border-color 0.15s ease;
   }
   input:focus, select:focus {
     outline: none;
@@ -187,18 +220,21 @@
   button {
     cursor: pointer;
     border: none;
-    border-radius: 8px;
+    border-radius: 12px;
     font-size: 1rem;
-    font-weight: 600;
-    transition: background 0.15s ease;
+    font-weight: 700;
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.15s ease;
   }
   .submit-btn {
     grid-column: 1 / -1;
-    background: var(--primary);
+    background: linear-gradient(135deg, var(--primary), var(--accent));
     color: #fff;
-    padding: 12px;
+    padding: 14px;
+    font-size: 1.05rem;
+    box-shadow: 0 8px 18px -6px rgba(124, 77, 255, 0.55);
   }
-  .submit-btn:hover { background: var(--primary-dark); }
+  .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -6px rgba(124, 77, 255, 0.65); }
+  .submit-btn:active { transform: translateY(0); }
 
   .summary-grid {
     display: grid;
@@ -213,8 +249,8 @@
     margin-bottom: 4px;
   }
   .summary-item .amount {
-    font-size: 1.2rem;
-    font-weight: 700;
+    font-size: 1.3rem;
+    font-weight: 800;
     color: var(--text);
   }
   .summary-item.income .amount { color: #2E7D32; }
@@ -230,7 +266,7 @@
   thead th {
     text-align: left;
     color: var(--muted);
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.78rem;
     padding: 6px 8px;
     border-bottom: 2px solid var(--border);
@@ -241,18 +277,21 @@
     vertical-align: middle;
   }
   tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.15s ease; }
+  tbody tr:hover { background: #faf8ff; }
   .amount-cell {
     text-align: right;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+    font-weight: 700;
   }
   .category-badge {
     display: inline-block;
-    padding: 2px 8px;
+    padding: 3px 10px;
     border-radius: 999px;
     font-size: 0.78rem;
     white-space: nowrap;
-    font-weight: 600;
+    font-weight: 700;
   }
   .amount-income { color: #2E7D32; }
   .amount-expense { color: var(--text); }
@@ -261,9 +300,11 @@
     background: transparent;
     color: var(--danger);
     font-size: 0.78rem;
-    padding: 4px 8px;
+    padding: 4px 10px;
+    font-weight: 700;
+    border-radius: 999px;
   }
-  .delete-btn:hover { text-decoration: underline; }
+  .delete-btn:hover { background: #ffe3ea; }
   .empty {
     text-align: center;
     color: var(--muted);
@@ -335,16 +376,18 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .month-cell { white-space: nowrap; color: var(--muted); }
+  .month-cell { white-space: nowrap; color: var(--muted); font-weight: 600; }
 
   h2 {
     font-size: 1rem;
+    font-weight: 800;
     margin: 0 0 14px;
   }
 
   .sync-status {
     text-align: center;
     font-size: 0.78rem;
+    font-weight: 600;
     color: var(--muted);
     margin: -12px 0 20px;
   }
@@ -355,23 +398,30 @@
     align-items: center;
     gap: 8px;
     font-size: 0.85rem;
+    font-weight: 600;
     color: var(--muted);
     margin: -12px 0 20px;
+    background: #fff;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+    padding: 6px 14px;
+    border-radius: 999px;
+    box-shadow: 0 3px 10px -4px rgba(124, 77, 255, 0.25);
   }
-  .person-bar strong { color: var(--text); }
+  .person-bar strong { color: var(--primary-dark); }
   .person-bar button {
     background: none;
-    color: var(--primary);
+    color: var(--accent);
     font-size: 0.78rem;
     padding: 2px 6px;
-    text-decoration: underline;
-    font-weight: 500;
+    font-weight: 700;
   }
 
   .name-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.45);
+    background: rgba(60, 30, 90, 0.55);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -380,10 +430,11 @@
   }
   .name-modal {
     background: #fff;
-    border-radius: 12px;
+    border-radius: 22px;
     padding: 24px 20px;
     max-width: 360px;
     width: 100%;
+    box-shadow: 0 20px 50px -12px rgba(94, 53, 177, 0.5);
   }
   .name-modal h2 { margin-top: 0; }
   .name-modal p {
@@ -398,11 +449,12 @@
     margin-bottom: 16px;
   }
   .name-option-btn {
-    background: #eef3fc;
+    background: linear-gradient(135deg, #EDE7FF, #FFE3F0);
     color: var(--primary-dark);
     padding: 12px;
-    border-radius: 8px;
+    border-radius: 14px;
     font-size: 1rem;
+    font-weight: 700;
   }
   .name-new-row {
     display: flex;
@@ -412,16 +464,20 @@
     flex: 1;
   }
   .name-new-row button {
-    background: var(--primary);
+    background: linear-gradient(135deg, var(--primary), var(--accent));
     color: #fff;
-    padding: 0 16px;
+    padding: 0 18px;
+    border-radius: 12px;
   }
   .name-modal .full-note {
     color: var(--muted);
     font-size: 0.8rem;
   }
 
-  .shared-card { border: 2px solid #8E24AA22; }
+  .shared-card {
+    border: 2px solid #8E24AA33;
+    background: linear-gradient(160deg, #fff, #faf3ff);
+  }
   .shared-card h2 { color: #8E24AA; }
 
   .bar-chart-wrap {
@@ -445,8 +501,9 @@
     background: #E3F2FD;
     color: #1565C0;
     font-size: 0.8rem;
-    padding: 10px 12px;
-    border-radius: 8px;
+    font-weight: 600;
+    padding: 10px 14px;
+    border-radius: 14px;
     margin: -4px 0 0;
   }
 </style>
