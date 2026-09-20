@@ -509,12 +509,12 @@
         <button type="button" id="category-manage-btn" class="cat-manage-link">＋ カテゴリを追加・編集</button>
       </div>
       <div class="full">
-        <label for="date">日付</label>
-        <input type="date" id="date" required>
-      </div>
-      <div class="full">
         <label for="memo">メモ(任意)</label>
         <input type="text" id="memo" placeholder="お店・内容など">
+      </div>
+      <div class="full">
+        <label for="date">日付</label>
+        <input type="date" id="date" required>
       </div>
       <button type="submit" class="submit-btn" id="submit-btn">追加する</button>
     </form>
@@ -541,31 +541,6 @@
         <span class="amount" id="balance-amount">¥0</span>
       </div>
     </div>
-  </div>
-
-  <div class="card">
-    <h2>支出のカテゴリ別内訳</h2>
-    <div class="chart-row" id="chart-row">
-      <svg id="category-chart" width="180" height="180" viewBox="0 0 200 200"></svg>
-      <ul class="legend" id="category-legend"></ul>
-    </div>
-    <div class="empty" id="chart-empty" style="display:none;">この期間の記録がありません</div>
-  </div>
-
-  <div class="card">
-    <h2>月別の合計</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>年月</th>
-          <th style="text-align:right;">収入</th>
-          <th style="text-align:right;">支出</th>
-          <th style="text-align:right;">収支</th>
-        </tr>
-      </thead>
-      <tbody id="month-summary"></tbody>
-    </table>
-    <div class="empty" id="month-empty" style="display:none;">まだ記録がありません</div>
   </div>
 
   <div class="card shared-card">
@@ -602,6 +577,31 @@
       <tbody id="shared-list"></tbody>
     </table>
     <div class="empty" id="shared-empty" style="display:none;">まだ記録がありません</div>
+  </div>
+
+  <div class="card">
+    <h2>支出のカテゴリ別内訳</h2>
+    <div class="chart-row" id="chart-row">
+      <svg id="category-chart" width="180" height="180" viewBox="0 0 200 200"></svg>
+      <ul class="legend" id="category-legend"></ul>
+    </div>
+    <div class="empty" id="chart-empty" style="display:none;">この期間の記録がありません</div>
+  </div>
+
+  <div class="card">
+    <h2>月別の合計</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>年月</th>
+          <th style="text-align:right;">収入</th>
+          <th style="text-align:right;">支出</th>
+          <th style="text-align:right;">収支</th>
+        </tr>
+      </thead>
+      <tbody id="month-summary"></tbody>
+    </table>
+    <div class="empty" id="month-empty" style="display:none;">まだ記録がありません</div>
   </div>
 
   <div class="card">
