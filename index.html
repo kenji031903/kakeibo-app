@@ -211,11 +211,19 @@
     font-size: 1rem;
     margin: 0 0 14px;
   }
+
+  .sync-status {
+    text-align: center;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin: -12px 0 20px;
+  }
 </style>
 </head>
 <body>
 <div class="container">
   <h1>かんたん家計簿</h1>
+  <div class="sync-status" id="sync-status">読み込み中...</div>
 
   <div class="card">
     <form id="expense-form">
@@ -296,7 +304,21 @@
   </div>
 </div>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 <script>
+  // 2人で共有したい場合は、Firebaseコンソール(https://console.firebase.google.com/)で
+  // 作成したプロジェクトの「firebaseConfig」をここに貼り付けてください。
+  // 未設定のまま(apiKeyが"YOUR_API_KEY"のまま)なら、このデバイス内だけで動作します。
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID",
+  };
+
   const STORAGE_KEY = 'kakeibo-expenses';
   const CATEGORY_COLORS = {
     '食費': '#4C78A8',
@@ -324,6 +346,7 @@
   const chartEmpty = document.getElementById('chart-empty');
   const monthSummaryBody = document.getElementById('month-summary');
   const monthEmpty = document.getElementById('month-empty');
+  const syncStatusEl = document.getElementById('sync-status');
 
   dateInput.value = new Date().toISOString().slice(0, 10);
 
@@ -344,6 +367,43 @@
   }
 
   let expenses = loadExpenses();
+
+  function setSyncStatus(text) {
+    syncStatusEl.textContent = text;
+  }
+
+  let expensesCollection = null;
+  const isFirebaseConfigured = firebaseConfig.apiKey !== 'YOUR_API_KEY';
+
+  if (isFirebaseConfigured) {
+    try {
+      firebase.initializeApp(firebaseConfig);
+      const db = firebase.firestore();
+      db.enablePersistence({ synchronizeTabs: true }).catch(() => {
+        // multiple tabs or unsupported browser; safe to ignore.
+      });
+      expensesCollection = db.collection('expenses');
+
+      expensesCollection.onSnapshot(
+        (snapshot) => {
+          expenses = snapshot.docs.map((doc) => doc.data());
+          persistExpenses();
+          render();
+          setSyncStatus('🟢 2人で同期中');
+        },
+        (error) => {
+          console.error('Firestore sync error', error);
+          setSyncStatus('🟡 オフライン(このデバイスの記録のみ表示中)');
+        }
+      );
+    } catch (err) {
+      console.error('Firebase init failed', err);
+      expensesCollection = null;
+      setSyncStatus('⚪ 共有設定エラー。このデバイスのみに保存します');
+    }
+  } else {
+    setSyncStatus('⚪ 共有設定なし(このデバイスのみに保存)');
+  }
 
   function formatYen(value) {
     return '¥' + value.toLocaleString('ja-JP');
@@ -496,25 +556,40 @@
     const amount = Number(amountInput.value);
     if (!amount || amount <= 0 || !dateInput.value) return;
 
-    expenses.push({
+    const expense = {
       id: Date.now(),
       amount,
       category: categoryInput.value,
       date: dateInput.value,
-    });
-    persistExpenses();
+    };
+
+    if (expensesCollection) {
+      expensesCollection.doc(String(expense.id)).set(expense).catch((err) => {
+        console.error('Firestore write failed', err);
+      });
+    } else {
+      expenses.push(expense);
+      persistExpenses();
+      render();
+    }
 
     amountInput.value = '';
     amountInput.focus();
-    render();
   });
 
   listBody.addEventListener('click', (e) => {
     if (!e.target.classList.contains('delete-btn')) return;
     const id = Number(e.target.dataset.id);
-    expenses = expenses.filter((exp) => exp.id !== id);
-    persistExpenses();
-    render();
+
+    if (expensesCollection) {
+      expensesCollection.doc(String(id)).delete().catch((err) => {
+        console.error('Firestore delete failed', err);
+      });
+    } else {
+      expenses = expenses.filter((exp) => exp.id !== id);
+      persistExpenses();
+      render();
+    }
   });
 
   monthFilter.addEventListener('change', () => {
