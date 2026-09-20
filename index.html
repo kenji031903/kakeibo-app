@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>かんたん家計簿</title>
 <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#3f7fd6">
+<meta name="theme-color" content="#FF9F5A">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,23 +13,23 @@
 <meta name="apple-mobile-web-app-title" content="家計簿">
 <style>
   :root {
-    --bg: #f2edff;
+    --bg: #fff8f0;
     --card-bg: #ffffff;
-    --primary: #7C4DFF;
-    --primary-dark: #5E35B1;
-    --accent: #FF4081;
-    --text: #2b2f36;
-    --muted: #7c7f96;
-    --border: #ece7fb;
-    --danger: #F4436C;
+    --primary: #FF9F5A;
+    --primary-dark: #E17A2E;
+    --accent: #FFD59E;
+    --text: #3a332c;
+    --muted: #9c8b7a;
+    --border: #f5e1cc;
+    --danger: #FF6B4A;
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: "Hiragino Kaku Gothic ProN", "Meiryo", "Segoe UI", sans-serif;
     background:
-      radial-gradient(circle at 10% 0%, #ffe3f3 0%, transparent 45%),
-      radial-gradient(circle at 90% 15%, #e0e7ff 0%, transparent 45%),
+      radial-gradient(circle at 10% 0%, #ffe9d2 0%, transparent 45%),
+      radial-gradient(circle at 90% 15%, #fff3e0 0%, transparent 45%),
       var(--bg);
     background-attachment: fixed;
     color: var(--text);
@@ -47,15 +47,15 @@
     margin: 0 0 20px;
     padding: 14px 20px;
     border-radius: 999px;
-    background: linear-gradient(135deg, #7C4DFF, #FF4081);
-    box-shadow: 0 8px 20px -6px rgba(124, 77, 255, 0.55);
+    background: linear-gradient(135deg, #FF9F5A, #FFC98A);
+    box-shadow: 0 8px 20px -6px rgba(255, 159, 90, 0.5);
     letter-spacing: 0.02em;
   }
   .card {
     background: var(--card-bg);
     border-radius: 20px;
     padding: 20px;
-    box-shadow: 0 6px 20px -8px rgba(124, 77, 255, 0.18);
+    box-shadow: 0 6px 20px -8px rgba(255, 159, 90, 0.15);
     margin-bottom: 20px;
     border: 1px solid var(--border);
   }
@@ -71,7 +71,7 @@
     display: flex;
     gap: 6px;
     border-radius: 999px;
-    background: #f3f0fb;
+    background: #fff2e2;
     padding: 5px;
     margin-bottom: 4px;
   }
@@ -86,21 +86,21 @@
     transition: transform 0.12s ease, box-shadow 0.12s ease;
   }
   .type-toggle .type-btn.active[data-type="支出"] {
-    background: linear-gradient(135deg, #FF6B9D, var(--danger));
+    background: linear-gradient(135deg, #FFAB91, var(--danger));
     color: #fff;
-    box-shadow: 0 4px 12px -4px rgba(244, 67, 108, 0.6);
+    box-shadow: 0 4px 12px -4px rgba(255, 107, 74, 0.5);
     transform: translateY(-1px);
   }
   .type-toggle .type-btn.active[data-type="収入"] {
-    background: linear-gradient(135deg, #4ADE80, #2E7D32);
+    background: linear-gradient(135deg, #AEDDB0, #6FBF73);
     color: #fff;
-    box-shadow: 0 4px 12px -4px rgba(46, 125, 50, 0.5);
+    box-shadow: 0 4px 12px -4px rgba(111, 191, 115, 0.45);
     transform: translateY(-1px);
   }
   .type-toggle .type-btn.active[data-type="2人の支出"] {
-    background: linear-gradient(135deg, #B388FF, #8E24AA);
+    background: linear-gradient(135deg, #D9B8E8, #AB6BC4);
     color: #fff;
-    box-shadow: 0 4px 12px -4px rgba(142, 36, 170, 0.5);
+    box-shadow: 0 4px 12px -4px rgba(171, 107, 196, 0.4);
     transform: translateY(-1px);
   }
 
@@ -143,7 +143,7 @@
   .cat-manage-link {
     display: block;
     background: none;
-    color: var(--accent);
+    color: var(--primary-dark);
     font-size: 0.8rem;
     padding: 6px 0 0;
     text-align: left;
@@ -209,7 +209,7 @@
     border: 2px solid var(--border);
     border-radius: 12px;
     font-size: 1rem;
-    background: #fbfaff;
+    background: #fffaf5;
     color: var(--text);
     transition: border-color 0.15s ease;
   }
@@ -231,9 +231,9 @@
     color: #fff;
     padding: 14px;
     font-size: 1.05rem;
-    box-shadow: 0 8px 18px -6px rgba(124, 77, 255, 0.55);
+    box-shadow: 0 8px 18px -6px rgba(255, 159, 90, 0.55);
   }
-  .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -6px rgba(124, 77, 255, 0.65); }
+  .submit-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -6px rgba(255, 159, 90, 0.65); }
   .submit-btn:active { transform: translateY(0); }
 
   .summary-grid {
@@ -278,7 +278,7 @@
   }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr { transition: background 0.15s ease; }
-  tbody tr:hover { background: #faf8ff; }
+  tbody tr:hover { background: #fff6ec; }
   .amount-cell {
     text-align: right;
     font-variant-numeric: tabular-nums;
@@ -304,7 +304,7 @@
     font-weight: 700;
     border-radius: 999px;
   }
-  .delete-btn:hover { background: #ffe3ea; }
+  .delete-btn:hover { background: #ffe4d9; }
   .empty {
     text-align: center;
     color: var(--muted);
@@ -407,12 +407,12 @@
     margin-right: auto;
     padding: 6px 14px;
     border-radius: 999px;
-    box-shadow: 0 3px 10px -4px rgba(124, 77, 255, 0.25);
+    box-shadow: 0 3px 10px -4px rgba(255, 159, 90, 0.25);
   }
   .person-bar strong { color: var(--primary-dark); }
   .person-bar button {
     background: none;
-    color: var(--accent);
+    color: var(--primary-dark);
     font-size: 0.78rem;
     padding: 2px 6px;
     font-weight: 700;
@@ -421,7 +421,7 @@
   .name-modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(60, 30, 90, 0.55);
+    background: rgba(120, 65, 20, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -434,7 +434,7 @@
     padding: 24px 20px;
     max-width: 360px;
     width: 100%;
-    box-shadow: 0 20px 50px -12px rgba(94, 53, 177, 0.5);
+    box-shadow: 0 20px 50px -12px rgba(225, 122, 46, 0.4);
   }
   .name-modal h2 { margin-top: 0; }
   .name-modal p {
@@ -449,7 +449,7 @@
     margin-bottom: 16px;
   }
   .name-option-btn {
-    background: linear-gradient(135deg, #EDE7FF, #FFE3F0);
+    background: linear-gradient(135deg, #FFF0DE, #FFE3C2);
     color: var(--primary-dark);
     padding: 12px;
     border-radius: 14px;
@@ -475,10 +475,10 @@
   }
 
   .shared-card {
-    border: 2px solid #8E24AA33;
-    background: linear-gradient(160deg, #fff, #faf3ff);
+    border: 2px solid #AB6BC433;
+    background: linear-gradient(160deg, #fff, #fbf3fc);
   }
-  .shared-card h2 { color: #8E24AA; }
+  .shared-card h2 { color: #AB6BC4; }
 
   .bar-chart-wrap {
     overflow-x: auto;
@@ -557,7 +557,7 @@
         <button type="button" class="type-btn" data-type="収入">収入</button>
         <button type="button" class="type-btn" data-type="2人の支出">2人の支出</button>
       </div>
-      <p class="full" id="shared-hint" style="display:none; color:#8E24AA; font-size:0.78rem; margin:-4px 0 0;">
+      <p class="full" id="shared-hint" style="display:none; color:#AB6BC4; font-size:0.78rem; margin:-4px 0 0;">
         入力した金額は半分ずつ、お二人それぞれの個人の家計簿に自動で登録されます。
       </p>
       <p class="shared-warning" id="shared-warning" style="display:none;"></p>
@@ -1435,7 +1435,7 @@
       rect.setAttribute('width', String(barWidth));
       rect.setAttribute('height', String(barHeight));
       rect.setAttribute('rx', '4');
-      rect.setAttribute('fill', '#8E24AA');
+      rect.setAttribute('fill', '#AB6BC4');
       sharedBarChart.appendChild(rect);
 
       const valueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
