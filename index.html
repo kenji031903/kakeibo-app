@@ -227,6 +227,7 @@
   .chart-row {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 20px;
     flex-wrap: wrap;
   }
@@ -359,7 +360,37 @@
   .shared-card { border: 2px solid #8E24AA22; }
   .shared-card h2 { color: #8E24AA; }
 
-  .bar-chart-wrap { overflow-x: auto; }
+  .bar-chart-wrap {
+    overflow-x: auto;
+    display: flex;
+    justify-content: center;
+  }
+
+  .memo-note {
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-weight: 400;
+    margin-top: 2px;
+    max-width: 120px;
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .shared-warning {
+    grid-column: 1 / -1;
+    background: #FFF3E0;
+    color: #E65100;
+    font-size: 0.8rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin: -4px 0 0;
+  }
+
+  .submit-btn:disabled {
+    background: var(--border);
+    color: var(--muted);
+    cursor: not-allowed;
+  }
 </style>
 </head>
 <body>
@@ -394,6 +425,7 @@
       <p class="full" id="shared-hint" style="display:none; color:#8E24AA; font-size:0.78rem; margin:-4px 0 0;">
         入力した金額は半分ずつ、お二人それぞれの個人の家計簿に自動で登録されます。
       </p>
+      <p class="shared-warning" id="shared-warning" style="display:none;"></p>
       <input type="hidden" id="type" value="支出">
       <div class="full">
         <label for="amount">金額(円)</label>
@@ -408,7 +440,11 @@
         <label for="date">日付</label>
         <input type="date" id="date" required>
       </div>
-      <button type="submit" class="submit-btn">追加する</button>
+      <div class="full">
+        <label for="memo">メモ(任意)</label>
+        <input type="text" id="memo" placeholder="お店・内容など">
+      </div>
+      <button type="submit" class="submit-btn" id="submit-btn">追加する</button>
     </form>
   </div>
 
@@ -566,6 +602,9 @@
   const categoryGrid = document.getElementById('category-grid');
   const categoryInput = document.getElementById('category');
   const dateInput = document.getElementById('date');
+  const memoInput = document.getElementById('memo');
+  const submitBtn = document.getElementById('submit-btn');
+  const sharedWarning = document.getElementById('shared-warning');
   const monthFilter = document.getElementById('month-filter');
   const listBody = document.getElementById('expense-list');
   const incomeEl = document.getElementById('income-amount');
@@ -612,6 +651,28 @@
   function iconForCategory(name) {
     return CATEGORY_ICONS[baseCategoryName(name)] || '';
   }
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function updateSharedAvailability() {
+    if (typeInput.value !== '2人の支出') {
+      sharedWarning.style.display = 'none';
+      submitBtn.disabled = false;
+      return;
+    }
+    if (people.length < 2) {
+      sharedWarning.textContent =
+        '⚠️ もう一人分の名前が登録されるまで使えません(現在登録済み: ' + (people.join('、') || 'まだ0人') + ')';
+      sharedWarning.style.display = 'block';
+      submitBtn.disabled = true;
+    } else {
+      sharedWarning.style.display = 'none';
+      submitBtn.disabled = false;
+    }
+  }
 
   function renderCategoryGrid() {
     const categories = getCategoriesForType(typeInput.value);
@@ -642,6 +703,7 @@
       typeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
       sharedHint.style.display = btn.dataset.type === '2人の支出' ? 'block' : 'none';
       renderCategoryGrid();
+      updateSharedAvailability();
     });
   });
 
@@ -704,6 +766,7 @@
   function persistPeople(list) {
     people = list;
     persistPeopleLocal(list);
+    updateSharedAvailability();
     if (peopleDoc) {
       peopleDoc.set({ names: list }).catch((err) => console.error('people write failed', err));
     }
@@ -793,6 +856,7 @@
           const data = doc.data();
           people = (data && data.names) || [];
           persistPeopleLocal(people);
+          updateSharedAvailability();
           if (nameModalOverlay.style.display === 'flex') openNameModal();
         },
         (error) => {
@@ -871,9 +935,10 @@
       const amountClass = type === '収入' ? 'amount-income' : 'amount-expense';
       const color = colorForCategory(record.category);
       const icon = iconForCategory(record.category);
+      const memoHtml = record.memo ? `<div class="memo-note">${escapeHtml(record.memo)}</div>` : '';
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="date-cell">${record.date}</td>
+        <td class="date-cell">${record.date}${memoHtml}</td>
         <td><span class="category-badge" style="background:${color}22; color:${color}">${icon} ${record.category}</span></td>
         <td class="amount-cell ${amountClass}">${sign}${formatYen(record.amount)}</td>
         <td><button class="delete-btn" data-id="${record.id}">削除</button></td>
@@ -995,9 +1060,10 @@
     for (const record of sorted) {
       const color = colorForCategory(record.category);
       const icon = iconForCategory(record.category);
+      const memoHtml = record.memo ? `<div class="memo-note">${escapeHtml(record.memo)}</div>` : '';
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="date-cell">${record.date}</td>
+        <td class="date-cell">${record.date}${memoHtml}</td>
         <td><span class="category-badge" style="background:${color}22; color:${color}">${icon} ${record.category}</span></td>
         <td class="amount-cell amount-expense">${formatYen(record.amount)}</td>
         <td><button class="delete-btn" data-id="${record.id}">削除</button></td>
@@ -1102,13 +1168,29 @@
     renderSharedSection();
   }
 
+  function addLocallyAsFallback(records, reason) {
+    // Never lose an entry the user just submitted: if the cloud write failed for
+    // any reason (offline, permission, quota), keep it on this device instead.
+    for (const record of records) {
+      if (!expenses.some((e) => e.id === record.id)) {
+        expenses.push(record);
+      }
+    }
+    persistExpenses();
+    render();
+    setSyncStatus('🟡 ' + reason);
+  }
+
   function writeRecords(records) {
     if (expensesCollection) {
       const batch = db.batch();
       for (const record of records) {
         batch.set(expensesCollection.doc(String(record.id)), record);
       }
-      batch.commit().catch((err) => console.error('Firestore batch write failed', err));
+      batch.commit().catch((err) => {
+        console.error('Firestore batch write failed', err);
+        addLocallyAsFallback(records, 'クラウドへの保存に失敗したため、この端末にのみ保存しました');
+      });
     } else {
       expenses.push(...records);
       persistExpenses();
@@ -1137,7 +1219,13 @@
       for (const delId of idsToDelete) {
         batch.delete(expensesCollection.doc(String(delId)));
       }
-      batch.commit().catch((err) => console.error('Firestore cascade delete failed', err));
+      batch.commit().catch((err) => {
+        console.error('Firestore cascade delete failed', err);
+        expenses = expenses.filter((e) => !idsToDelete.includes(e.id));
+        persistExpenses();
+        render();
+        setSyncStatus('🟡 クラウドからの削除に失敗したため、この端末では削除しました');
+      });
     } else {
       expenses = expenses.filter((e) => !idsToDelete.includes(e.id));
       persistExpenses();
@@ -1152,10 +1240,11 @@
 
     const selectedType = typeInput.value;
     const category = categoryInput.value;
+    const memo = memoInput.value.trim();
 
     if (selectedType === '2人の支出') {
       if (people.length < 2) {
-        alert('先にお二人とも名前を登録してください(現在登録済み: ' + (people.join('、') || 'まだ0人') + ')');
+        updateSharedAvailability();
         return;
       }
 
@@ -1170,6 +1259,7 @@
         date: dateInput.value,
         type: '支出',
         shared: true,
+        memo,
       };
       const childRecords = [
         {
@@ -1180,6 +1270,7 @@
           type: '支出',
           person: people[0],
           splitGroupId: sharedId,
+          memo,
         },
         {
           id: sharedId + 2,
@@ -1189,6 +1280,7 @@
           type: '支出',
           person: people[1],
           splitGroupId: sharedId,
+          memo,
         },
       ];
 
@@ -1201,11 +1293,13 @@
         date: dateInput.value,
         type: selectedType,
         person: currentPerson,
+        memo,
       };
       writeRecords([record]);
     }
 
     amountInput.value = '';
+    memoInput.value = '';
     amountInput.focus();
   });
 
@@ -1232,6 +1326,7 @@
   });
 
   renderPersonUI();
+  updateSharedAvailability();
   if (!currentPerson) {
     openNameModal();
   }
