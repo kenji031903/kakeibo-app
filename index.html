@@ -142,6 +142,75 @@
     font-size: 0.9rem;
   }
   .date-cell { white-space: nowrap; color: var(--muted); }
+
+  .filter-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .filter-row label {
+    margin: 0;
+    white-space: nowrap;
+  }
+  .filter-row select {
+    width: auto;
+    min-width: 140px;
+  }
+
+  .chart-row {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+  }
+  .chart-row svg { flex-shrink: 0; }
+  .legend {
+    flex: 1;
+    min-width: 180px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    font-size: 0.85rem;
+  }
+  .legend li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .legend li:last-child { border-bottom: none; }
+  .legend .legend-name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+  }
+  .legend .swatch {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .legend .legend-value {
+    text-align: right;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .legend .legend-value strong {
+    color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .month-cell { white-space: nowrap; color: var(--muted); }
+
+  h2 {
+    font-size: 1rem;
+    margin: 0 0 14px;
+  }
 </style>
 </head>
 <body>
@@ -175,9 +244,40 @@
     </form>
   </div>
 
-  <div class="card total-box">
-    <span class="label">合計金額</span>
-    <span class="amount" id="total-amount">¥0</span>
+  <div class="card">
+    <div class="filter-row">
+      <label for="month-filter">表示する期間</label>
+      <select id="month-filter">
+        <option value="all">すべての期間</option>
+      </select>
+    </div>
+    <div class="total-box">
+      <span class="label">合計金額</span>
+      <span class="amount" id="total-amount">¥0</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>カテゴリ別の内訳</h2>
+    <div class="chart-row" id="chart-row">
+      <svg id="category-chart" width="180" height="180" viewBox="0 0 200 200"></svg>
+      <ul class="legend" id="category-legend"></ul>
+    </div>
+    <div class="empty" id="chart-empty" style="display:none;">この期間の記録がありません</div>
+  </div>
+
+  <div class="card">
+    <h2>月別の合計</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>年月</th>
+          <th style="text-align:right;">合計金額</th>
+        </tr>
+      </thead>
+      <tbody id="month-summary"></tbody>
+    </table>
+    <div class="empty" id="month-empty" style="display:none;">まだ記録がありません</div>
   </div>
 
   <div class="card">
@@ -198,13 +298,32 @@
 
 <script>
   const STORAGE_KEY = 'kakeibo-expenses';
+  const CATEGORY_COLORS = {
+    '食費': '#4C78A8',
+    '日用品': '#F58518',
+    '交通費': '#54A24B',
+    '交際費': '#E45756',
+    '趣味・娯楽': '#72B7B2',
+    '住居・水道光熱費': '#EECA3B',
+    '医療費': '#B279A2',
+    'その他': '#9D755D',
+  };
+  const DEFAULT_COLOR = '#9CA3AF';
+
   const form = document.getElementById('expense-form');
   const amountInput = document.getElementById('amount');
   const categoryInput = document.getElementById('category');
   const dateInput = document.getElementById('date');
+  const monthFilter = document.getElementById('month-filter');
   const listBody = document.getElementById('expense-list');
   const totalEl = document.getElementById('total-amount');
   const emptyMessage = document.getElementById('empty-message');
+  const chartSvg = document.getElementById('category-chart');
+  const chartLegend = document.getElementById('category-legend');
+  const chartRow = document.getElementById('chart-row');
+  const chartEmpty = document.getElementById('chart-empty');
+  const monthSummaryBody = document.getElementById('month-summary');
+  const monthEmpty = document.getElementById('month-empty');
 
   dateInput.value = new Date().toISOString().slice(0, 10);
 
@@ -230,8 +349,36 @@
     return '¥' + value.toLocaleString('ja-JP');
   }
 
-  function render() {
-    const sorted = [...expenses].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  function monthOf(dateStr) {
+    return dateStr.slice(0, 7);
+  }
+
+  function getFilteredExpenses() {
+    if (monthFilter.value === 'all') return expenses;
+    return expenses.filter((e) => monthOf(e.date) === monthFilter.value);
+  }
+
+  function renderMonthFilterOptions() {
+    const months = [...new Set(expenses.map((e) => monthOf(e.date)))].sort().reverse();
+    const current = monthFilter.value;
+
+    monthFilter.innerHTML = '<option value="all">すべての期間</option>';
+    for (const month of months) {
+      const option = document.createElement('option');
+      option.value = month;
+      option.textContent = month.replace('-', '年') + '月';
+      monthFilter.appendChild(option);
+    }
+
+    if (current === 'all' || months.includes(current)) {
+      monthFilter.value = current;
+    } else {
+      monthFilter.value = 'all';
+    }
+  }
+
+  function renderList(filtered) {
+    const sorted = [...filtered].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
 
     listBody.innerHTML = '';
     emptyMessage.style.display = sorted.length === 0 ? 'block' : 'none';
@@ -247,8 +394,101 @@
       listBody.appendChild(tr);
     }
 
-    const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+    const total = filtered.reduce((sum, e) => sum + e.amount, 0);
     totalEl.textContent = formatYen(total);
+  }
+
+  function renderCategoryChart(filtered) {
+    const totalsByCategory = new Map();
+    for (const expense of filtered) {
+      totalsByCategory.set(expense.category, (totalsByCategory.get(expense.category) || 0) + expense.amount);
+    }
+
+    const entries = [...totalsByCategory.entries()].sort((a, b) => b[1] - a[1]);
+    const grandTotal = entries.reduce((sum, [, amount]) => sum + amount, 0);
+
+    chartSvg.innerHTML = '';
+    chartLegend.innerHTML = '';
+
+    if (grandTotal === 0) {
+      chartRow.style.display = 'none';
+      chartEmpty.style.display = 'block';
+      return;
+    }
+    chartRow.style.display = 'flex';
+    chartEmpty.style.display = 'none';
+
+    const radius = 70;
+    const strokeWidth = 32;
+    const circumference = 2 * Math.PI * radius;
+    let offset = 0;
+
+    for (const [category, amount] of entries) {
+      const color = CATEGORY_COLORS[category] || DEFAULT_COLOR;
+      const length = (amount / grandTotal) * circumference;
+
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', '100');
+      circle.setAttribute('cy', '100');
+      circle.setAttribute('r', String(radius));
+      circle.setAttribute('fill', 'none');
+      circle.setAttribute('stroke', color);
+      circle.setAttribute('stroke-width', String(strokeWidth));
+      circle.setAttribute('stroke-dasharray', `${length} ${circumference - length}`);
+      circle.setAttribute('stroke-dashoffset', String(-offset));
+      circle.setAttribute('transform', 'rotate(-90 100 100)');
+      chartSvg.appendChild(circle);
+
+      offset += length;
+
+      const li = document.createElement('li');
+      const percent = ((amount / grandTotal) * 100).toFixed(1);
+      li.innerHTML = `
+        <span class="legend-name"><span class="swatch" style="background:${color}"></span>${category}</span>
+        <span class="legend-value"><strong>${formatYen(amount)}</strong> (${percent}%)</span>
+      `;
+      chartLegend.appendChild(li);
+    }
+
+    const centerText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    centerText.setAttribute('x', '100');
+    centerText.setAttribute('y', '105');
+    centerText.setAttribute('text-anchor', 'middle');
+    centerText.setAttribute('font-size', '18');
+    centerText.setAttribute('font-weight', '700');
+    centerText.setAttribute('fill', '#2b2f36');
+    centerText.textContent = formatYen(grandTotal);
+    chartSvg.appendChild(centerText);
+  }
+
+  function renderMonthSummary() {
+    const totalsByMonth = new Map();
+    for (const expense of expenses) {
+      const month = monthOf(expense.date);
+      totalsByMonth.set(month, (totalsByMonth.get(month) || 0) + expense.amount);
+    }
+
+    const months = [...totalsByMonth.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+
+    monthSummaryBody.innerHTML = '';
+    monthEmpty.style.display = months.length === 0 ? 'block' : 'none';
+
+    for (const [month, total] of months) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="month-cell">${month.replace('-', '年')}月</td>
+        <td class="amount-cell">${formatYen(total)}</td>
+      `;
+      monthSummaryBody.appendChild(tr);
+    }
+  }
+
+  function render() {
+    renderMonthFilterOptions();
+    const filtered = getFilteredExpenses();
+    renderList(filtered);
+    renderCategoryChart(filtered);
+    renderMonthSummary();
   }
 
   form.addEventListener('submit', (e) => {
@@ -275,6 +515,12 @@
     expenses = expenses.filter((exp) => exp.id !== id);
     persistExpenses();
     render();
+  });
+
+  monthFilter.addEventListener('change', () => {
+    const filtered = getFilteredExpenses();
+    renderList(filtered);
+    renderCategoryChart(filtered);
   });
 
   render();
