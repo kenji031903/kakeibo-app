@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>かんたん家計簿</title>
+<style>
+  :root {
+    --bg: #f4f6f8;
+    --card-bg: #ffffff;
+    --primary: #3f7fd6;
+    --primary-dark: #2f63ab;
+    --text: #2b2f36;
+    --muted: #6b7280;
+    --border: #e2e6ea;
+    --danger: #e0554f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Hiragino Kaku Gothic ProN", "Meiryo", "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 60px;
+  }
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  h1 {
+    text-align: center;
+    font-size: 1.5rem;
+    margin-bottom: 20px;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    margin-bottom: 20px;
+  }
+  form {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  form .full { grid-column: 1 / -1; }
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  input, select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    background: #fff;
+    color: var(--text);
+  }
+  input:focus, select:focus {
+    outline: none;
+    border-color: var(--primary);
+  }
+  button {
+    cursor: pointer;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: background 0.15s ease;
+  }
+  .submit-btn {
+    grid-column: 1 / -1;
+    background: var(--primary);
+    color: #fff;
+    padding: 12px;
+  }
+  .submit-btn:hover { background: var(--primary-dark); }
+
+  .total-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .total-box .label {
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+  .total-box .amount {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--primary-dark);
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+  }
+  thead th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 0.78rem;
+    padding: 6px 8px;
+    border-bottom: 2px solid var(--border);
+  }
+  tbody td {
+    padding: 10px 8px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  .amount-cell {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .category-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #eef3fc;
+    color: var(--primary-dark);
+    font-size: 0.78rem;
+    white-space: nowrap;
+  }
+  .delete-btn {
+    background: transparent;
+    color: var(--danger);
+    font-size: 0.78rem;
+    padding: 4px 8px;
+  }
+  .delete-btn:hover { text-decoration: underline; }
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 24px 0;
+    font-size: 0.9rem;
+  }
+  .date-cell { white-space: nowrap; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>かんたん家計簿</h1>
+
+  <div class="card">
+    <form id="expense-form">
+      <div class="full">
+        <label for="amount">金額(円)</label>
+        <input type="number" id="amount" min="0" step="1" placeholder="1000" required>
+      </div>
+      <div>
+        <label for="category">カテゴリ</label>
+        <select id="category">
+          <option>食費</option>
+          <option>日用品</option>
+          <option>交通費</option>
+          <option>交際費</option>
+          <option>趣味・娯楽</option>
+          <option>住居・水道光熱費</option>
+          <option>医療費</option>
+          <option>その他</option>
+        </select>
+      </div>
+      <div>
+        <label for="date">日付</label>
+        <input type="date" id="date" required>
+      </div>
+      <button type="submit" class="submit-btn">追加する</button>
+    </form>
+  </div>
+
+  <div class="card total-box">
+    <span class="label">合計金額</span>
+    <span class="amount" id="total-amount">¥0</span>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead>
+        <tr>
+          <th>日付</th>
+          <th>カテゴリ</th>
+          <th style="text-align:right;">金額</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="expense-list"></tbody>
+    </table>
+    <div class="empty" id="empty-message" style="display:none;">まだ記録がありません</div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'kakeibo-expenses';
+  const form = document.getElementById('expense-form');
+  const amountInput = document.getElementById('amount');
+  const categoryInput = document.getElementById('category');
+  const dateInput = document.getElementById('date');
+  const listBody = document.getElementById('expense-list');
+  const totalEl = document.getElementById('total-amount');
+  const emptyMessage = document.getElementById('empty-message');
+
+  dateInput.value = new Date().toISOString().slice(0, 10);
+
+  function loadExpenses() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveExpenses(expenses) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+  }
+
+  function formatYen(value) {
+    return '¥' + value.toLocaleString('ja-JP');
+  }
+
+  function render() {
+    const expenses = loadExpenses();
+    const sorted = [...expenses].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+
+    listBody.innerHTML = '';
+    emptyMessage.style.display = sorted.length === 0 ? 'block' : 'none';
+
+    for (const expense of sorted) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="date-cell">${expense.date}</td>
+        <td><span class="category-badge">${expense.category}</span></td>
+        <td class="amount-cell">${formatYen(expense.amount)}</td>
+        <td><button class="delete-btn" data-id="${expense.id}">削除</button></td>
+      `;
+      listBody.appendChild(tr);
+    }
+
+    const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+    totalEl.textContent = formatYen(total);
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const amount = Number(amountInput.value);
+    if (!amount || amount <= 0 || !dateInput.value) return;
+
+    const expenses = loadExpenses();
+    expenses.push({
+      id: Date.now(),
+      amount,
+      category: categoryInput.value,
+      date: dateInput.value,
+    });
+    saveExpenses(expenses);
+
+    amountInput.value = '';
+    amountInput.focus();
+    render();
+  });
+
+  listBody.addEventListener('click', (e) => {
+    if (!e.target.classList.contains('delete-btn')) return;
+    const id = Number(e.target.dataset.id);
+    const expenses = loadExpenses().filter((exp) => exp.id !== id);
+    saveExpenses(expenses);
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
