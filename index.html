@@ -441,6 +441,31 @@
   }
   .date-cell { white-space: nowrap; color: var(--muted); }
 
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .section-header h2 { margin: 0; }
+  .collapse-toggle {
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 30px;
+    height: 30px;
+    font-size: 0.85rem;
+    color: var(--primary-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.15s ease;
+  }
+  .collapse-toggle.collapsed { transform: rotate(-90deg); }
+  .collapsible-body.collapsed { display: none; }
+
   .filter-row {
     display: flex;
     justify-content: space-between;
@@ -944,21 +969,26 @@
     </div>
     <div class="empty" id="shared-bar-empty" style="display:none;">まだ記録がありません</div>
 
-    <h2 style="margin-top:20px;">記録一覧</h2>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>カテゴリ</th>
-            <th style="text-align:right;">金額</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="shared-list"></tbody>
-      </table>
+    <div class="section-header">
+      <h2>記録一覧</h2>
+      <button type="button" class="collapse-toggle" id="shared-list-toggle" aria-expanded="true">▾</button>
     </div>
-    <div class="empty" id="shared-empty" style="display:none;">まだ記録がありません</div>
+    <div class="collapsible-body" id="shared-list-body">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>カテゴリ</th>
+              <th style="text-align:right;">金額</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="shared-list"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="shared-empty" style="display:none;">まだ記録がありません</div>
+    </div>
   </div>
 
   <div class="card personal-card">
@@ -1024,21 +1054,26 @@
     </div>
     <div class="empty" id="month-empty" style="display:none;">まだ記録がありません</div>
 
-    <h2 id="personal-list-heading" style="margin-top:20px;">個人の記録一覧</h2>
-    <div class="table-scroll">
-      <table>
-        <thead>
-          <tr>
-            <th>日付</th>
-            <th>カテゴリ</th>
-            <th style="text-align:right;">金額</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="expense-list"></tbody>
-      </table>
+    <div class="section-header">
+      <h2 id="personal-list-heading">個人の記録一覧</h2>
+      <button type="button" class="collapse-toggle" id="personal-list-toggle" aria-expanded="true">▾</button>
     </div>
-    <div class="empty" id="empty-message" style="display:none;">まだ記録がありません</div>
+    <div class="collapsible-body" id="personal-list-body">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>日付</th>
+              <th>カテゴリ</th>
+              <th style="text-align:right;">金額</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="expense-list"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="empty-message" style="display:none;">まだ記録がありません</div>
+    </div>
   </div>
 </div>
 
@@ -1779,6 +1814,39 @@
   }
 
   renderCategoryGrid();
+
+  function setupCollapsibleSection(toggleId, bodyId, storageKey) {
+    const toggle = document.getElementById(toggleId);
+    const body = document.getElementById(bodyId);
+    if (!toggle || !body) return;
+
+    let collapsed = false;
+    try {
+      collapsed = localStorage.getItem(storageKey) === '1';
+    } catch {
+      // ignore
+    }
+
+    function apply() {
+      body.classList.toggle('collapsed', collapsed);
+      toggle.classList.toggle('collapsed', collapsed);
+      toggle.setAttribute('aria-expanded', String(!collapsed));
+    }
+    apply();
+
+    toggle.addEventListener('click', () => {
+      collapsed = !collapsed;
+      apply();
+      try {
+        localStorage.setItem(storageKey, collapsed ? '1' : '0');
+      } catch {
+        // ignore
+      }
+    });
+  }
+
+  setupCollapsibleSection('personal-list-toggle', 'personal-list-body', 'kakeibo-collapse-personal-list');
+  setupCollapsibleSection('shared-list-toggle', 'shared-list-body', 'kakeibo-collapse-shared-list');
 
   function loadExpenses() {
     try {
