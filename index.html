@@ -186,6 +186,14 @@
     color: var(--primary);
   }
   .category-manage-row button.cat-delete-btn { color: var(--danger); }
+  .category-manage-row button.cat-move-btn {
+    padding: 4px 6px;
+    color: var(--muted);
+    font-size: 0.7rem;
+  }
+  .category-manage-row button.cat-move-btn:disabled {
+    opacity: 0.25;
+  }
 
   .category-edit-row {
     display: flex;
@@ -500,6 +508,12 @@
   }
   .shared-card h2 { color: #AB6BC4; }
 
+  .personal-card {
+    border: 2px solid #E17A2E33;
+    background: linear-gradient(160deg, #fff, #fff6ec);
+  }
+  .personal-card h2 { color: var(--primary-dark); }
+
   .bar-chart-wrap {
     overflow-x: auto;
     display: flex;
@@ -604,29 +618,6 @@
     </form>
   </div>
 
-  <div class="card">
-    <div class="filter-row">
-      <label for="month-filter">表示する期間</label>
-      <select id="month-filter">
-        <option value="all">すべての期間</option>
-      </select>
-    </div>
-    <div class="summary-grid">
-      <div class="summary-item income">
-        <span class="label">収入</span>
-        <span class="amount" id="income-amount">¥0</span>
-      </div>
-      <div class="summary-item expense">
-        <span class="label">支出</span>
-        <span class="amount" id="expense-amount">¥0</span>
-      </div>
-      <div class="summary-item balance">
-        <span class="label">収支</span>
-        <span class="amount" id="balance-amount">¥0</span>
-      </div>
-    </div>
-  </div>
-
   <div class="card shared-card">
     <h2>🤝 2人の支出</h2>
     <div class="summary-grid" style="grid-template-columns: 1fr;">
@@ -642,11 +633,16 @@
     </div>
     <div class="empty" id="shared-chart-empty" style="display:none;">この期間の記録がありません</div>
 
-    <div class="filter-row" style="margin-top:20px; margin-bottom:0;">
+    <div class="filter-row" style="margin-top:20px; margin-bottom:0; flex-wrap:wrap;">
       <h2 style="margin:0;">月ごとの推移</h2>
-      <select id="shared-trend-year-filter">
-        <option value="all">すべての期間</option>
-      </select>
+      <div style="display:flex; gap:8px;">
+        <select id="shared-trend-category-filter">
+          <option value="all">すべてのカテゴリ</option>
+        </select>
+        <select id="shared-trend-year-filter">
+          <option value="all">すべての期間</option>
+        </select>
+      </div>
     </div>
     <div class="bar-chart-wrap">
       <svg id="shared-bar-chart" height="180"></svg>
@@ -670,31 +666,54 @@
     <div class="empty" id="shared-empty" style="display:none;">まだ記録がありません</div>
   </div>
 
-  <div class="card">
-    <h2>支出のカテゴリ別内訳</h2>
+  <div class="card personal-card">
+    <h2 id="personal-card-heading">🧑 個人の家計簿</h2>
+    <div class="filter-row">
+      <label for="month-filter">表示する期間</label>
+      <select id="month-filter">
+        <option value="all">すべての期間</option>
+      </select>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-item income">
+        <span class="label">収入</span>
+        <span class="amount" id="income-amount">¥0</span>
+      </div>
+      <div class="summary-item expense">
+        <span class="label">支出</span>
+        <span class="amount" id="expense-amount">¥0</span>
+      </div>
+      <div class="summary-item balance">
+        <span class="label">収支</span>
+        <span class="amount" id="balance-amount">¥0</span>
+      </div>
+    </div>
+
+    <h2 style="margin-top:20px;">カテゴリ別の内訳</h2>
     <div class="chart-row" id="chart-row">
       <svg id="category-chart" width="180" height="180" viewBox="0 0 200 200"></svg>
       <ul class="legend" id="category-legend"></ul>
     </div>
     <div class="empty" id="chart-empty" style="display:none;">この期間の記録がありません</div>
-  </div>
 
-  <div class="card">
-    <div class="filter-row" style="margin-bottom:0;">
+    <div class="filter-row" style="margin-top:20px; margin-bottom:0; flex-wrap:wrap;">
       <h2 style="margin:0;">月ごとの推移</h2>
-      <select id="personal-trend-year-filter">
-        <option value="all">すべての期間</option>
-      </select>
+      <div style="display:flex; gap:8px;">
+        <select id="personal-trend-category-filter">
+          <option value="all">すべてのカテゴリ</option>
+        </select>
+        <select id="personal-trend-year-filter">
+          <option value="all">すべての期間</option>
+        </select>
+      </div>
     </div>
     <div class="bar-chart-wrap">
       <svg id="personal-bar-chart" height="180"></svg>
     </div>
     <div class="empty" id="personal-bar-empty" style="display:none;">まだ記録がありません</div>
     <div class="legend" id="personal-bar-legend" style="justify-content:center; display:flex; gap:16px; margin-top:8px;"></div>
-  </div>
 
-  <div class="card">
-    <h2>月別の合計</h2>
+    <h2 style="margin-top:20px;">月別の合計</h2>
     <div class="table-scroll">
       <table>
         <thead>
@@ -709,10 +728,8 @@
       </table>
     </div>
     <div class="empty" id="month-empty" style="display:none;">まだ記録がありません</div>
-  </div>
 
-  <div class="card">
-    <h2 id="personal-list-heading">個人の記録一覧</h2>
+    <h2 id="personal-list-heading" style="margin-top:20px;">個人の記録一覧</h2>
     <div class="table-scroll">
       <table>
         <thead>
@@ -865,11 +882,13 @@
   const sharedBarChart = document.getElementById('shared-bar-chart');
   const sharedBarEmpty = document.getElementById('shared-bar-empty');
   const sharedTrendYearFilter = document.getElementById('shared-trend-year-filter');
+  const sharedTrendCategoryFilter = document.getElementById('shared-trend-category-filter');
 
   const personalBarChart = document.getElementById('personal-bar-chart');
   const personalBarEmpty = document.getElementById('personal-bar-empty');
   const personalBarLegend = document.getElementById('personal-bar-legend');
   const personalTrendYearFilter = document.getElementById('personal-trend-year-filter');
+  const personalTrendCategoryFilter = document.getElementById('personal-trend-category-filter');
 
   const categoryManageBtn = document.getElementById('category-manage-btn');
   const categoryModalOverlay = document.getElementById('category-modal-overlay');
@@ -954,17 +973,19 @@
   function renderCategoryManageList() {
     const list = getCategoriesForType(categoryModalType);
     categoryManageList.innerHTML = '';
-    for (const cat of list) {
+    list.forEach((cat, idx) => {
       const row = document.createElement('div');
       row.className = 'category-manage-row';
       row.innerHTML = `
         <span class="icon-circle" style="background:${cat.color}">${cat.icon}</span>
         <span class="cat-manage-name">${escapeHtml(cat.name)}</span>
+        <button type="button" class="cat-move-btn" data-name="${escapeHtml(cat.name)}" data-dir="up" ${idx === 0 ? 'disabled' : ''}>▲</button>
+        <button type="button" class="cat-move-btn" data-name="${escapeHtml(cat.name)}" data-dir="down" ${idx === list.length - 1 ? 'disabled' : ''}>▼</button>
         <button type="button" class="cat-edit-btn" data-name="${escapeHtml(cat.name)}">編集</button>
         <button type="button" class="cat-delete-btn" data-name="${escapeHtml(cat.name)}">削除</button>
       `;
       categoryManageList.appendChild(row);
-    }
+    });
   }
 
   function openCategoryModal() {
@@ -1020,7 +1041,17 @@
     if (!name) return;
     const list = getCategoriesForType(categoryModalType);
 
-    if (e.target.classList.contains('cat-edit-btn')) {
+    if (e.target.classList.contains('cat-move-btn')) {
+      const idx = list.findIndex((c) => c.name === name);
+      if (idx === -1) return;
+      const dir = e.target.dataset.dir === 'up' ? -1 : 1;
+      const swapIdx = idx + dir;
+      if (swapIdx < 0 || swapIdx >= list.length) return;
+      [list[idx], list[swapIdx]] = [list[swapIdx], list[idx]];
+      persistCategories();
+      renderCategoryManageList();
+      renderCategoryGrid();
+    } else if (e.target.classList.contains('cat-edit-btn')) {
       const cat = list.find((c) => c.name === name);
       if (!cat) return;
       editingCategoryName = name;
@@ -1630,31 +1661,73 @@
     });
   }
 
+  function renderCategoryFilterOptions(selectEl, records) {
+    const categories = [...new Set(records.map((r) => r.category))].sort();
+    const current = selectEl.value;
+
+    selectEl.innerHTML = '<option value="all">すべてのカテゴリ</option>';
+    for (const category of categories) {
+      const option = document.createElement('option');
+      option.value = category;
+      const icon = iconForCategory(category);
+      option.textContent = (icon ? icon + ' ' : '') + category;
+      selectEl.appendChild(option);
+    }
+
+    if (current === 'all' || categories.includes(current)) {
+      selectEl.value = current;
+    } else {
+      selectEl.value = 'all';
+    }
+  }
+
   function renderSharedBarChart() {
     const all = getSharedExpenses();
     renderYearFilterOptions(sharedTrendYearFilter, all);
+    renderCategoryFilterOptions(sharedTrendCategoryFilter, all);
+
     const year = sharedTrendYearFilter.value;
-    const filtered = year === 'all' ? all : all.filter((e) => yearOf(e.date) === year);
+    const category = sharedTrendCategoryFilter.value;
+    let filtered = year === 'all' ? all : all.filter((e) => yearOf(e.date) === year);
+    if (category !== 'all') filtered = filtered.filter((e) => e.category === category);
+
     const monthly = computeMonthlyTotals(filtered);
+    const color = category === 'all' ? '#AB6BC4' : colorForCategory(category);
     renderGroupedBarChart(sharedBarChart, sharedBarEmpty, monthly, [
-      { key: 'amount', color: '#AB6BC4' },
+      { key: 'amount', color },
     ]);
   }
 
   function renderPersonalBarChart() {
     const all = getPersonalExpenses();
     renderYearFilterOptions(personalTrendYearFilter, all);
+    renderCategoryFilterOptions(personalTrendCategoryFilter, all);
+
     const year = personalTrendYearFilter.value;
-    const filtered = year === 'all' ? all : all.filter((e) => yearOf(e.date) === year);
+    const category = personalTrendCategoryFilter.value;
+    let filtered = year === 'all' ? all : all.filter((e) => yearOf(e.date) === year);
+    if (category !== 'all') filtered = filtered.filter((e) => e.category === category);
+
     const monthly = computeMonthlyTotals(filtered);
-    renderGroupedBarChart(personalBarChart, personalBarEmpty, monthly, [
-      { key: 'income', color: '#6FBF73' },
-      { key: 'expense', color: '#FF6B4A' },
-    ]);
-    personalBarLegend.innerHTML = `
-      <span style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:#6FBF73;display:inline-block;"></span>収入</span>
-      <span style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:#FF6B4A;display:inline-block;"></span>支出</span>
-    `;
+
+    if (category === 'all') {
+      renderGroupedBarChart(personalBarChart, personalBarEmpty, monthly, [
+        { key: 'income', color: '#6FBF73' },
+        { key: 'expense', color: '#FF6B4A' },
+      ]);
+      personalBarLegend.style.display = 'flex';
+      personalBarLegend.innerHTML = `
+        <span style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:#6FBF73;display:inline-block;"></span>収入</span>
+        <span style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:#FF6B4A;display:inline-block;"></span>支出</span>
+      `;
+    } else {
+      const color = colorForCategory(category);
+      renderGroupedBarChart(personalBarChart, personalBarEmpty, monthly, [
+        { key: 'amount', color },
+      ]);
+      personalBarLegend.style.display = 'none';
+      personalBarLegend.innerHTML = '';
+    }
   }
 
   function renderSharedSection() {
@@ -1829,6 +1902,8 @@
 
   personalTrendYearFilter.addEventListener('change', renderPersonalBarChart);
   sharedTrendYearFilter.addEventListener('change', renderSharedBarChart);
+  personalTrendCategoryFilter.addEventListener('change', renderPersonalBarChart);
+  sharedTrendCategoryFilter.addEventListener('change', renderSharedBarChart);
 
   renderPersonUI();
   updateSharedAvailability();
