@@ -319,6 +319,20 @@
     border-radius: 999px;
   }
   .delete-btn:hover { background: #ffe4d9; }
+  .edit-btn {
+    background: transparent;
+    color: var(--primary-dark);
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    font-weight: 700;
+    border-radius: 999px;
+  }
+  .edit-btn:hover { background: #fff0dd; }
+  .row-actions {
+    white-space: nowrap;
+    display: flex;
+    gap: 2px;
+  }
   .empty {
     text-align: center;
     color: var(--muted);
@@ -677,6 +691,23 @@
     <input type="text" id="recurring-memo" placeholder="家賃・サブスクなど">
     <button type="button" id="recurring-save" class="submit-btn" style="margin-top:12px;">登録する</button>
     <button type="button" id="recurring-modal-close" class="cat-manage-link" style="margin-top:14px; width:100%; text-align:center;">閉じる</button>
+  </div>
+</div>
+
+<div id="edit-modal-overlay" class="name-modal-overlay" style="display:none;">
+  <div class="name-modal">
+    <h2>記録を編集</h2>
+    <label for="edit-category">カテゴリ</label>
+    <select id="edit-category"></select>
+    <div class="category-edit-row" style="margin-top:10px;">
+      <input type="number" id="edit-amount" placeholder="金額(円)" min="0" step="1">
+      <input type="date" id="edit-date">
+    </div>
+    <label for="edit-memo" style="margin-top:10px;">メモ(任意)</label>
+    <input type="text" id="edit-memo" placeholder="お店・内容など">
+    <button type="button" id="edit-save" class="submit-btn" style="margin-top:12px;">保存する</button>
+    <button type="button" id="edit-delete" class="cat-manage-link" style="margin-top:12px; width:100%; text-align:center; color:var(--danger);">この記録を削除</button>
+    <button type="button" id="edit-modal-close" class="cat-manage-link" style="margin-top:10px; width:100%; text-align:center;">閉じる</button>
   </div>
 </div>
 
@@ -1080,6 +1111,15 @@
   const calendarMonthLabel = document.getElementById('calendar-month-label');
   const calendarGrid = document.getElementById('calendar-grid');
   const calendarDayDetail = document.getElementById('calendar-day-detail');
+
+  const editModalOverlay = document.getElementById('edit-modal-overlay');
+  const editCategorySelect = document.getElementById('edit-category');
+  const editAmountInput = document.getElementById('edit-amount');
+  const editDateInput = document.getElementById('edit-date');
+  const editMemoInput = document.getElementById('edit-memo');
+  const editSaveBtn = document.getElementById('edit-save');
+  const editDeleteBtn = document.getElementById('edit-delete');
+  const editModalClose = document.getElementById('edit-modal-close');
 
   dateInput.value = new Date().toISOString().slice(0, 10);
 
@@ -1846,7 +1886,7 @@
         <td class="date-cell">${record.date}${memoHtml}</td>
         <td><span class="category-badge" style="background:${color}22; color:${color}">${icon} ${record.category}</span></td>
         <td class="amount-cell ${amountClass}">${sign}${formatYen(record.amount)}</td>
-        <td><button class="delete-btn" data-id="${record.id}">削除</button></td>
+        <td class="row-actions"><button class="edit-btn" data-id="${record.id}">編集</button><button class="delete-btn" data-id="${record.id}">削除</button></td>
       `;
       listBody.appendChild(tr);
     }
@@ -1971,7 +2011,7 @@
         <td class="date-cell">${record.date}${memoHtml}</td>
         <td><span class="category-badge" style="background:${color}22; color:${color}">${icon} ${record.category}</span></td>
         <td class="amount-cell amount-expense">${formatYen(record.amount)}</td>
-        <td><button class="delete-btn" data-id="${record.id}">削除</button></td>
+        <td class="row-actions"><button class="edit-btn" data-id="${record.id}">編集</button><button class="delete-btn" data-id="${record.id}">削除</button></td>
       `;
       sharedListBody.appendChild(tr);
     }
@@ -2192,7 +2232,11 @@
         html += `
           <div class="calendar-day-row">
             <span>${icon} ${escapeHtml(record.category)}${record.memo ? ' ・ ' + escapeHtml(record.memo) : ''}</span>
-            <span class="${cls}">${sign}${formatYen(record.amount)}</span>
+            <span style="display:flex; align-items:center; gap:8px;">
+              <span class="${cls}">${sign}${formatYen(record.amount)}</span>
+              <button type="button" class="edit-btn calendar-edit-btn" data-id="${record.id}">編集</button>
+              <button type="button" class="delete-btn calendar-delete-btn" data-id="${record.id}">削除</button>
+            </span>
           </div>
         `;
       }
@@ -2351,6 +2395,107 @@
     }
   }
 
+  let editingRecordId = null;
+  let editingIsShared = false;
+
+  function openEditModal(id) {
+    const record = expenses.find((e) => e.id === id);
+    if (!record) return;
+    editingRecordId = id;
+    editingIsShared = Boolean(record.shared) || record.splitGroupId != null;
+
+    const categoryType = typeOf(record) === '収入' ? '収入' : '支出';
+    const categories = getCategoriesForType(categoryType);
+    editCategorySelect.innerHTML = '';
+    for (const cat of categories) {
+      const opt = document.createElement('option');
+      opt.value = cat.name;
+      opt.textContent = cat.icon + ' ' + cat.name;
+      editCategorySelect.appendChild(opt);
+    }
+    const baseCat = baseCategoryName(record.category);
+    if (categories.some((c) => c.name === baseCat)) {
+      editCategorySelect.value = baseCat;
+    }
+
+    if (editingIsShared) {
+      const groupId = record.shared ? record.id : record.splitGroupId;
+      const parent = expenses.find((e) => e.shared && e.id === groupId);
+      editAmountInput.value = parent ? parent.amount : record.amount;
+      editDateInput.value = parent ? parent.date : record.date;
+      editMemoInput.value = (parent ? parent.memo : record.memo) || '';
+    } else {
+      editAmountInput.value = record.amount;
+      editDateInput.value = record.date;
+      editMemoInput.value = record.memo || '';
+    }
+
+    editModalOverlay.style.display = 'flex';
+  }
+
+  function closeEditModal() {
+    editModalOverlay.style.display = 'none';
+    editingRecordId = null;
+  }
+
+  editModalClose.addEventListener('click', closeEditModal);
+
+  editSaveBtn.addEventListener('click', () => {
+    if (!editingRecordId) return;
+    const record = expenses.find((e) => e.id === editingRecordId);
+    if (!record) return;
+
+    const category = editCategorySelect.value;
+    const amount = Number(editAmountInput.value);
+    const date = editDateInput.value;
+    const memo = editMemoInput.value.trim();
+    if (!amount || amount <= 0 || !date || !category) return;
+
+    let updatedRecords;
+
+    if (editingIsShared) {
+      const groupId = record.shared ? record.id : record.splitGroupId;
+      const parent = expenses.find((e) => e.shared && e.id === groupId);
+      const children = expenses
+        .filter((e) => e.splitGroupId === groupId)
+        .sort((a, b) => a.id - b.id);
+
+      const half1 = Math.ceil(amount / 2);
+      const half2 = amount - half1;
+      const halves = [half1, half2];
+
+      updatedRecords = [];
+      if (parent) {
+        updatedRecords.push({ ...parent, category, amount, date, memo });
+      }
+      children.forEach((child, i) => {
+        updatedRecords.push({
+          ...child,
+          category: category + '(2人)',
+          amount: halves[i] != null ? halves[i] : child.amount,
+          date,
+          memo,
+        });
+      });
+    } else {
+      updatedRecords = [{ ...record, category, amount, date, memo }];
+    }
+
+    for (const updated of updatedRecords) {
+      const idx = expenses.findIndex((e) => e.id === updated.id);
+      if (idx !== -1) expenses[idx] = updated;
+    }
+
+    persistRenamedRecords(updatedRecords);
+    closeEditModal();
+  });
+
+  editDeleteBtn.addEventListener('click', () => {
+    if (!editingRecordId) return;
+    deleteRecordCascade(editingRecordId);
+    closeEditModal();
+  });
+
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const amount = Number(amountInput.value);
@@ -2408,13 +2553,31 @@
   });
 
   listBody.addEventListener('click', (e) => {
+    if (e.target.classList.contains('edit-btn')) {
+      openEditModal(Number(e.target.dataset.id));
+      return;
+    }
     if (!e.target.classList.contains('delete-btn')) return;
     deleteRecordCascade(Number(e.target.dataset.id));
   });
 
   sharedListBody.addEventListener('click', (e) => {
+    if (e.target.classList.contains('edit-btn')) {
+      openEditModal(Number(e.target.dataset.id));
+      return;
+    }
     if (!e.target.classList.contains('delete-btn')) return;
     deleteRecordCascade(Number(e.target.dataset.id));
+  });
+
+  calendarDayDetail.addEventListener('click', (e) => {
+    if (e.target.classList.contains('calendar-edit-btn')) {
+      openEditModal(Number(e.target.dataset.id));
+      return;
+    }
+    if (e.target.classList.contains('calendar-delete-btn')) {
+      deleteRecordCascade(Number(e.target.dataset.id));
+    }
   });
 
   monthFilter.addEventListener('change', () => {
