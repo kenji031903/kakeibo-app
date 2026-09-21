@@ -642,7 +642,12 @@
     </div>
     <div class="empty" id="shared-chart-empty" style="display:none;">この期間の記録がありません</div>
 
-    <h2 style="margin-top:20px;">月ごとの推移(全期間)</h2>
+    <div class="filter-row" style="margin-top:20px; margin-bottom:0;">
+      <h2 style="margin:0;">月ごとの推移</h2>
+      <select id="shared-trend-year-filter">
+        <option value="all">すべての期間</option>
+      </select>
+    </div>
     <div class="bar-chart-wrap">
       <svg id="shared-bar-chart" height="180"></svg>
     </div>
@@ -672,6 +677,20 @@
       <ul class="legend" id="category-legend"></ul>
     </div>
     <div class="empty" id="chart-empty" style="display:none;">この期間の記録がありません</div>
+  </div>
+
+  <div class="card">
+    <div class="filter-row" style="margin-bottom:0;">
+      <h2 style="margin:0;">月ごとの推移</h2>
+      <select id="personal-trend-year-filter">
+        <option value="all">すべての期間</option>
+      </select>
+    </div>
+    <div class="bar-chart-wrap">
+      <svg id="personal-bar-chart" height="180"></svg>
+    </div>
+    <div class="empty" id="personal-bar-empty" style="display:none;">まだ記録がありません</div>
+    <div class="legend" id="personal-bar-legend" style="justify-content:center; display:flex; gap:16px; margin-top:8px;"></div>
   </div>
 
   <div class="card">
@@ -845,6 +864,12 @@
   const sharedChartEmpty = document.getElementById('shared-chart-empty');
   const sharedBarChart = document.getElementById('shared-bar-chart');
   const sharedBarEmpty = document.getElementById('shared-bar-empty');
+  const sharedTrendYearFilter = document.getElementById('shared-trend-year-filter');
+
+  const personalBarChart = document.getElementById('personal-bar-chart');
+  const personalBarEmpty = document.getElementById('personal-bar-empty');
+  const personalBarLegend = document.getElementById('personal-bar-legend');
+  const personalTrendYearFilter = document.getElementById('personal-trend-year-filter');
 
   const categoryManageBtn = document.getElementById('category-manage-btn');
   const categoryModalOverlay = document.getElementById('category-modal-overlay');
@@ -1499,71 +1524,137 @@
     sharedTotalEl.textContent = formatYen(total);
   }
 
-  function renderSharedBarChart() {
-    const all = getSharedExpenses();
-    const totalsByMonth = new Map();
-    for (const record of all) {
-      const month = monthOf(record.date);
-      totalsByMonth.set(month, (totalsByMonth.get(month) || 0) + record.amount);
+  function yearOf(dateStr) {
+    return dateStr.slice(0, 4);
+  }
+
+  function renderYearFilterOptions(selectEl, records) {
+    const years = [...new Set(records.map((r) => yearOf(r.date)))].sort().reverse();
+    const current = selectEl.value;
+
+    selectEl.innerHTML = '<option value="all">すべての期間</option>';
+    for (const year of years) {
+      const option = document.createElement('option');
+      option.value = year;
+      option.textContent = year + '年';
+      selectEl.appendChild(option);
     }
 
-    const months = [...totalsByMonth.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    if (current === 'all' || years.includes(current)) {
+      selectEl.value = current;
+    } else {
+      selectEl.value = 'all';
+    }
+  }
 
-    sharedBarChart.innerHTML = '';
+  function computeMonthlyTotals(records) {
+    const map = new Map();
+    for (const record of records) {
+      const month = monthOf(record.date);
+      const entry = map.get(month) || { amount: 0, income: 0, expense: 0 };
+      entry.amount += record.amount;
+      if (typeOf(record) === '収入') {
+        entry.income += record.amount;
+      } else {
+        entry.expense += record.amount;
+      }
+      map.set(month, entry);
+    }
+    return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }
 
-    if (months.length === 0) {
-      sharedBarChart.style.display = 'none';
-      sharedBarEmpty.style.display = 'block';
+  function renderGroupedBarChart(svgEl, emptyEl, monthlyData, series) {
+    svgEl.innerHTML = '';
+
+    if (monthlyData.length === 0) {
+      svgEl.style.display = 'none';
+      emptyEl.style.display = 'block';
       return;
     }
-    sharedBarChart.style.display = 'block';
-    sharedBarEmpty.style.display = 'none';
+    svgEl.style.display = 'block';
+    emptyEl.style.display = 'none';
 
-    const barWidth = 40;
-    const gap = 20;
+    const barWidth = series.length > 1 ? 22 : 40;
+    const barGap = 4;
+    const groupGap = 20;
+    const groupWidth = series.length * barWidth + (series.length - 1) * barGap;
     const chartHeight = 110;
     const topMargin = 24;
     const bottomMargin = 30;
     const svgHeight = topMargin + chartHeight + bottomMargin;
-    const svgWidth = months.length * (barWidth + gap) + gap;
-    const max = Math.max(...months.map(([, v]) => v), 1);
+    const svgWidth = monthlyData.length * (groupWidth + groupGap) + groupGap;
+    const max = Math.max(1, ...monthlyData.flatMap(([, vals]) => series.map((s) => vals[s.key] || 0)));
 
-    sharedBarChart.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
-    sharedBarChart.setAttribute('width', String(svgWidth));
-    sharedBarChart.setAttribute('height', String(svgHeight));
+    svgEl.setAttribute('viewBox', `0 0 ${svgWidth} ${svgHeight}`);
+    svgEl.setAttribute('width', String(svgWidth));
+    svgEl.setAttribute('height', String(svgHeight));
 
-    months.forEach(([month, amount], i) => {
-      const barHeight = (amount / max) * chartHeight;
-      const x = gap + i * (barWidth + gap);
-      const y = topMargin + (chartHeight - barHeight);
+    monthlyData.forEach(([month, vals], i) => {
+      const groupX = groupGap + i * (groupWidth + groupGap);
 
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.setAttribute('x', String(x));
-      rect.setAttribute('y', String(y));
-      rect.setAttribute('width', String(barWidth));
-      rect.setAttribute('height', String(barHeight));
-      rect.setAttribute('rx', '4');
-      rect.setAttribute('fill', '#AB6BC4');
-      sharedBarChart.appendChild(rect);
+      series.forEach((s, si) => {
+        const amount = vals[s.key] || 0;
+        const barHeight = (amount / max) * chartHeight;
+        const x = groupX + si * (barWidth + barGap);
+        const y = topMargin + (chartHeight - barHeight);
 
-      const valueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      valueText.setAttribute('x', String(x + barWidth / 2));
-      valueText.setAttribute('y', String(Math.max(y - 6, 12)));
-      valueText.setAttribute('text-anchor', 'middle');
-      valueText.setAttribute('font-size', '11');
-      valueText.setAttribute('fill', '#2b2f36');
-      valueText.textContent = formatYen(amount);
-      sharedBarChart.appendChild(valueText);
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('x', String(x));
+        rect.setAttribute('y', String(y));
+        rect.setAttribute('width', String(barWidth));
+        rect.setAttribute('height', String(barHeight));
+        rect.setAttribute('rx', '3');
+        rect.setAttribute('fill', s.color);
+        svgEl.appendChild(rect);
+
+        if (amount > 0) {
+          const valueText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          valueText.setAttribute('x', String(x + barWidth / 2));
+          valueText.setAttribute('y', String(Math.max(y - 5, 10)));
+          valueText.setAttribute('text-anchor', 'middle');
+          valueText.setAttribute('font-size', series.length > 1 ? '8.5' : '11');
+          valueText.setAttribute('fill', '#2b2f36');
+          valueText.textContent = formatYen(amount);
+          svgEl.appendChild(valueText);
+        }
+      });
 
       const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-      labelText.setAttribute('x', String(x + barWidth / 2));
+      labelText.setAttribute('x', String(groupX + groupWidth / 2));
       labelText.setAttribute('y', String(topMargin + chartHeight + 20));
       labelText.setAttribute('text-anchor', 'middle');
       labelText.setAttribute('font-size', '11');
       labelText.setAttribute('fill', '#6b7280');
       labelText.textContent = month.replace('-', '/');
-      sharedBarChart.appendChild(labelText);
+      svgEl.appendChild(labelText);
     });
+  }
+
+  function renderSharedBarChart() {
+    const all = getSharedExpenses();
+    renderYearFilterOptions(sharedTrendYearFilter, all);
+    const year = sharedTrendYearFilter.value;
+    const filtered = year === 'all' ? all : all.filter((e) => yearOf(e.date) === year);
+    const monthly = computeMonthlyTotals(filtered);
+    renderGroupedBarChart(sharedBarChart, sharedBarEmpty, monthly, [
+      { key: 'amount', color: '#AB6BC4' },
+    ]);
+  }
+
+  function renderPersonalBarChart() {
+    const all = getPersonalExpenses();
+    renderYearFilterOptions(personalTrendYearFilter, all);
+    const year = personalTrendYearFilter.value;
+    const filtered = year === 'all' ? all : all.filter((e) => yearOf(e.date) === year);
+    const monthly = computeMonthlyTotals(filtered);
+    renderGroupedBarChart(personalBarChart, personalBarEmpty, monthly, [
+      { key: 'income', color: '#6FBF73' },
+      { key: 'expense', color: '#FF6B4A' },
+    ]);
+    personalBarLegend.innerHTML = `
+      <span style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:#6FBF73;display:inline-block;"></span>収入</span>
+      <span style="display:flex; align-items:center; gap:6px; font-size:0.8rem; color:var(--muted);"><span style="width:10px;height:10px;border-radius:50%;background:#FF6B4A;display:inline-block;"></span>支出</span>
+    `;
   }
 
   function renderSharedSection() {
@@ -1589,6 +1680,7 @@
       empty: chartEmpty,
     });
     renderMonthSummary();
+    renderPersonalBarChart();
     renderSharedSection();
   }
 
@@ -1734,6 +1826,9 @@
     });
     renderSharedSection();
   });
+
+  personalTrendYearFilter.addEventListener('change', renderPersonalBarChart);
+  sharedTrendYearFilter.addEventListener('change', renderSharedBarChart);
 
   renderPersonUI();
   updateSharedAvailability();
