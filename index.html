@@ -592,6 +592,55 @@
     font-weight: 700;
   }
 
+  .budget-month-label {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .budget-row {
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .budget-row:last-child { border-bottom: none; }
+  .budget-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+  }
+  .budget-row-name {
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .budget-row-values {
+    display: flex;
+    gap: 10px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .budget-row-actual { font-weight: 700; color: var(--text); }
+  .budget-row-actual.over-budget { color: var(--danger); }
+  .budget-row-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .budget-row-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+  .budget-row-fill.over-budget { background: var(--danger); }
+  .budget-card .empty { padding: 16px 0; }
+
   .name-modal-overlay {
     position: fixed;
     inset: 0;
@@ -898,6 +947,16 @@
   <div class="person-bar">
     表示中: <strong id="current-person-label">-</strong>
     <button type="button" id="change-person-btn">名前を変更</button>
+  </div>
+
+  <div class="card budget-card">
+    <h2 style="margin:0 0 4px;">🎯 今月の目標</h2>
+    <p class="budget-month-label" id="budget-month-label"></p>
+    <div id="budget-summary-list"></div>
+    <div class="empty" id="budget-summary-empty" style="display:none;">
+      目標金額が設定されているカテゴリはありません
+      <button type="button" id="budget-summary-empty-btn" class="cat-manage-link" style="margin-top:6px;">＋ カテゴリに目標金額を設定する</button>
+    </div>
   </div>
 
   <div class="card">
@@ -1254,6 +1313,10 @@
   const nameFullNote = document.getElementById('name-full-note');
   const currentPersonLabel = document.getElementById('current-person-label');
   const changePersonBtn = document.getElementById('change-person-btn');
+  const budgetMonthLabel = document.getElementById('budget-month-label');
+  const budgetSummaryList = document.getElementById('budget-summary-list');
+  const budgetSummaryEmpty = document.getElementById('budget-summary-empty');
+  const budgetSummaryEmptyBtn = document.getElementById('budget-summary-empty-btn');
 
   const sharedListBody = document.getElementById('shared-list');
   const sharedEmpty = document.getElementById('shared-empty');
@@ -2745,6 +2808,52 @@
     renderCalendar();
   });
 
+  function renderBudgetSummary() {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const [y, m] = currentMonth.split('-').map(Number);
+    budgetMonthLabel.textContent = `${y}年${String(m).padStart(2, '0')}月・${currentPerson || '個人'}の支出`;
+
+    const monthRecords = getPersonalExpenses().filter(
+      (e) => monthOf(e.date) === currentMonth && typeOf(e) === '支出'
+    );
+    const totalsByCategory = new Map();
+    for (const record of monthRecords) {
+      const base = baseCategoryName(record.category);
+      totalsByCategory.set(base, (totalsByCategory.get(base) || 0) + record.amount);
+    }
+
+    const budgeted = EXPENSE_CATEGORIES.filter((c) => c.budget);
+    budgetSummaryList.innerHTML = '';
+
+    if (budgeted.length === 0) {
+      budgetSummaryEmpty.style.display = 'block';
+      return;
+    }
+    budgetSummaryEmpty.style.display = 'none';
+
+    for (const cat of budgeted) {
+      const spent = totalsByCategory.get(cat.name) || 0;
+      const over = spent > cat.budget;
+      const percent = Math.min(100, Math.round((spent / cat.budget) * 100));
+
+      const row = document.createElement('div');
+      row.className = 'budget-row';
+      row.innerHTML = `
+        <div class="budget-row-top">
+          <span class="budget-row-name">${cat.icon} ${escapeHtml(cat.name)}</span>
+          <span class="budget-row-values">
+            <span class="budget-row-target">目標 ${formatYen(cat.budget)}</span>
+            <span class="budget-row-actual${over ? ' over-budget' : ''}">支出 ${formatYen(spent)}${over ? ' ⚠️' : ''}</span>
+          </span>
+        </div>
+        <div class="budget-row-bar"><div class="budget-row-fill${over ? ' over-budget' : ''}" style="width:${percent}%"></div></div>
+      `;
+      budgetSummaryList.appendChild(row);
+    }
+  }
+
+  budgetSummaryEmptyBtn.addEventListener('click', openCategoryModal);
+
   function render() {
     renderMonthFilterOptions();
     const filtered = getFilteredExpenses();
@@ -2759,6 +2868,7 @@
     renderPersonalBarChart();
     renderSharedSection();
     renderCalendar();
+    renderBudgetSummary();
   }
 
   function addLocallyAsFallback(records, reason) {
