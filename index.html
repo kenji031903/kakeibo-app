@@ -514,6 +514,83 @@
   }
   .personal-card h2 { color: var(--primary-dark); }
 
+  .calendar-nav {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 10px;
+    font-weight: 700;
+  }
+  .calendar-nav button {
+    background: #fff2e2;
+    color: var(--primary-dark);
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    font-size: 1rem;
+    line-height: 1;
+  }
+  .calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--muted);
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+  }
+  .calendar-day {
+    aspect-ratio: 1;
+    border-radius: 8px;
+    background: #fbfaff;
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    font-size: 0.7rem;
+    color: var(--text);
+    cursor: pointer;
+    padding: 2px;
+    overflow: hidden;
+  }
+  .calendar-day.empty-cell {
+    background: transparent;
+    border: none;
+    cursor: default;
+  }
+  .calendar-day.today { border-color: var(--primary); border-width: 2px; }
+  .calendar-day.selected { background: var(--primary); color: #fff; }
+  .calendar-day .cal-amount-expense { color: var(--danger); font-size: 0.62rem; font-weight: 700; }
+  .calendar-day .cal-amount-income { color: #2E7D32; font-size: 0.62rem; font-weight: 700; }
+  .calendar-day.selected .cal-amount-expense,
+  .calendar-day.selected .cal-amount-income { color: #fff; }
+
+  .calendar-day-list {
+    margin-top: 14px;
+  }
+  .calendar-day-list h3 {
+    font-size: 0.85rem;
+    margin: 0 0 8px;
+    color: var(--primary-dark);
+  }
+  .calendar-day-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .calendar-day-row:last-child { border-bottom: none; }
+
   .bar-chart-wrap {
     overflow-x: auto;
     display: flex;
@@ -644,6 +721,27 @@
       <button type="submit" class="submit-btn" id="submit-btn">追加する</button>
     </form>
     <button type="button" id="recurring-manage-btn" class="cat-manage-link" style="margin-top:10px;">🔁 定期的な支出・収入を管理</button>
+  </div>
+
+  <div class="card">
+    <h2>📅 カレンダー</h2>
+    <div class="filter-row" style="margin-bottom:12px;">
+      <label>表示する家計簿</label>
+      <select id="calendar-scope">
+        <option value="personal">個人</option>
+        <option value="shared">2人の支出</option>
+      </select>
+    </div>
+    <div class="calendar-nav">
+      <button type="button" id="calendar-prev">‹</button>
+      <span id="calendar-month-label">2026年09月</span>
+      <button type="button" id="calendar-next">›</button>
+    </div>
+    <div class="calendar-weekdays">
+      <span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span>
+    </div>
+    <div class="calendar-grid" id="calendar-grid"></div>
+    <div id="calendar-day-detail"></div>
   </div>
 
   <div class="card shared-card">
@@ -975,6 +1073,13 @@
   const recurringMemoInput = document.getElementById('recurring-memo');
   const recurringSaveBtn = document.getElementById('recurring-save');
   const recurringModalClose = document.getElementById('recurring-modal-close');
+
+  const calendarScope = document.getElementById('calendar-scope');
+  const calendarPrevBtn = document.getElementById('calendar-prev');
+  const calendarNextBtn = document.getElementById('calendar-next');
+  const calendarMonthLabel = document.getElementById('calendar-month-label');
+  const calendarGrid = document.getElementById('calendar-grid');
+  const calendarDayDetail = document.getElementById('calendar-day-detail');
 
   dateInput.value = new Date().toISOString().slice(0, 10);
 
@@ -2062,6 +2167,109 @@
     renderSharedBarChart();
   }
 
+  let calendarMonth = monthOf(new Date().toISOString().slice(0, 10));
+  let selectedCalendarDay = null;
+
+  function getCalendarRecords() {
+    return calendarScope.value === 'shared' ? getSharedExpenses() : getPersonalExpenses();
+  }
+
+  function renderCalendarDayDetail(records) {
+    if (!selectedCalendarDay) {
+      calendarDayDetail.innerHTML = '';
+      return;
+    }
+    const dayRecords = records.filter((e) => e.date === selectedCalendarDay);
+    let html = `<div class="calendar-day-list"><h3>${selectedCalendarDay}</h3>`;
+    if (dayRecords.length === 0) {
+      html += `<p style="color:var(--muted); font-size:0.85rem;">この日の記録はありません</p>`;
+    } else {
+      for (const record of dayRecords) {
+        const type = typeOf(record);
+        const sign = type === '収入' ? '+' : '-';
+        const cls = type === '収入' ? 'amount-income' : 'amount-expense';
+        const icon = iconForCategory(record.category);
+        html += `
+          <div class="calendar-day-row">
+            <span>${icon} ${escapeHtml(record.category)}${record.memo ? ' ・ ' + escapeHtml(record.memo) : ''}</span>
+            <span class="${cls}">${sign}${formatYen(record.amount)}</span>
+          </div>
+        `;
+      }
+    }
+    html += '</div>';
+    calendarDayDetail.innerHTML = html;
+  }
+
+  function renderCalendar() {
+    const records = getCalendarRecords();
+    const [year, month] = calendarMonth.split('-').map(Number);
+    calendarMonthLabel.textContent = `${year}年${String(month).padStart(2, '0')}月`;
+
+    const totalsByDay = new Map();
+    for (const record of records) {
+      if (monthOf(record.date) !== calendarMonth) continue;
+      const entry = totalsByDay.get(record.date) || { income: 0, expense: 0 };
+      if (typeOf(record) === '収入') entry.income += record.amount;
+      else entry.expense += record.amount;
+      totalsByDay.set(record.date, entry);
+    }
+
+    const firstWeekday = new Date(year, month - 1, 1).getDay();
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const todayStr = new Date().toISOString().slice(0, 10);
+
+    calendarGrid.innerHTML = '';
+    for (let i = 0; i < firstWeekday; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'calendar-day empty-cell';
+      calendarGrid.appendChild(empty);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateStr = `${calendarMonth}-${String(d).padStart(2, '0')}`;
+      const cell = document.createElement('div');
+      cell.className = 'calendar-day';
+      if (dateStr === todayStr) cell.classList.add('today');
+      if (dateStr === selectedCalendarDay) cell.classList.add('selected');
+
+      const totals = totalsByDay.get(dateStr);
+      let amountsHtml = '';
+      if (totals) {
+        if (totals.expense > 0) amountsHtml += `<span class="cal-amount-expense">-${formatYen(totals.expense)}</span>`;
+        if (totals.income > 0) amountsHtml += `<span class="cal-amount-income">+${formatYen(totals.income)}</span>`;
+      }
+      cell.innerHTML = `<span>${d}</span>${amountsHtml}`;
+      cell.addEventListener('click', () => {
+        selectedCalendarDay = selectedCalendarDay === dateStr ? null : dateStr;
+        renderCalendar();
+      });
+      calendarGrid.appendChild(cell);
+    }
+
+    renderCalendarDayDetail(records);
+  }
+
+  calendarPrevBtn.addEventListener('click', () => {
+    calendarMonth = (() => {
+      const [y, m] = calendarMonth.split('-').map(Number);
+      return new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
+    })();
+    selectedCalendarDay = null;
+    renderCalendar();
+  });
+
+  calendarNextBtn.addEventListener('click', () => {
+    calendarMonth = nextMonthStr(calendarMonth);
+    selectedCalendarDay = null;
+    renderCalendar();
+  });
+
+  calendarScope.addEventListener('change', () => {
+    selectedCalendarDay = null;
+    renderCalendar();
+  });
+
   function render() {
     renderMonthFilterOptions();
     const filtered = getFilteredExpenses();
@@ -2075,6 +2283,7 @@
     renderMonthSummary();
     renderPersonalBarChart();
     renderSharedSection();
+    renderCalendar();
   }
 
   function addLocallyAsFallback(records, reason) {
