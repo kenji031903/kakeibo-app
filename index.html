@@ -576,6 +576,33 @@
   </div>
 </div>
 
+<div id="recurring-modal-overlay" class="name-modal-overlay" style="display:none;">
+  <div class="name-modal">
+    <h2>🔁 定期的な支出・収入</h2>
+    <p>毎月決まった日に、家賃やお給料のように自動で記録されます。</p>
+    <div id="recurring-list" class="category-manage-list"></div>
+
+    <h2 style="margin-top:20px; font-size:0.9rem;" id="recurring-form-heading">新しく登録</h2>
+    <div class="type-toggle" id="recurring-type-toggle" style="margin-bottom:10px;">
+      <button type="button" class="type-btn active" data-type="支出">支出</button>
+      <button type="button" class="type-btn" data-type="収入">収入</button>
+      <button type="button" class="type-btn" data-type="2人の支出">2人の支出</button>
+    </div>
+    <label for="recurring-category">カテゴリ</label>
+    <select id="recurring-category"></select>
+    <div class="category-edit-row" style="margin-top:10px;">
+      <input type="number" id="recurring-amount" placeholder="金額(円)" min="0" step="1">
+      <input type="number" id="recurring-day" placeholder="毎月何日" min="1" max="31">
+    </div>
+    <label for="recurring-start-month" style="margin-top:10px;">開始月</label>
+    <input type="month" id="recurring-start-month">
+    <label for="recurring-memo" style="margin-top:10px;">メモ(任意)</label>
+    <input type="text" id="recurring-memo" placeholder="家賃・サブスクなど">
+    <button type="button" id="recurring-save" class="submit-btn" style="margin-top:12px;">登録する</button>
+    <button type="button" id="recurring-modal-close" class="cat-manage-link" style="margin-top:14px; width:100%; text-align:center;">閉じる</button>
+  </div>
+</div>
+
 <div class="container">
   <h1>かんたん家計簿</h1>
   <div class="sync-status" id="sync-status">読み込み中...</div>
@@ -616,6 +643,7 @@
       </div>
       <button type="submit" class="submit-btn" id="submit-btn">追加する</button>
     </form>
+    <button type="button" id="recurring-manage-btn" class="cat-manage-link" style="margin-top:10px;">🔁 定期的な支出・収入を管理</button>
   </div>
 
   <div class="card shared-card">
@@ -839,6 +867,34 @@
     }
   }
 
+  const RECURRING_KEY = 'kakeibo-recurring';
+
+  function loadRecurringLocal() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(RECURRING_KEY));
+      return Array.isArray(raw) ? raw : [];
+    } catch {
+      return [];
+    }
+  }
+  function persistRecurringLocal(list) {
+    try {
+      localStorage.setItem(RECURRING_KEY, JSON.stringify(list));
+    } catch {
+      // ignore
+    }
+  }
+
+  let recurringRules = loadRecurringLocal();
+  let recurringDoc = null;
+
+  function persistRecurring() {
+    persistRecurringLocal(recurringRules);
+    if (recurringDoc) {
+      recurringDoc.set({ rules: recurringRules }).catch((err) => console.error('recurring write failed', err));
+    }
+  }
+
   function getCategoriesForType(type) {
     return type === '収入' ? INCOME_CATEGORIES : EXPENSE_CATEGORIES;
   }
@@ -906,6 +962,19 @@
   const categoryEditName = document.getElementById('category-edit-name');
   const categoryEditSave = document.getElementById('category-edit-save');
   const categoryModalClose = document.getElementById('category-modal-close');
+
+  const recurringManageBtn = document.getElementById('recurring-manage-btn');
+  const recurringModalOverlay = document.getElementById('recurring-modal-overlay');
+  const recurringList = document.getElementById('recurring-list');
+  const recurringFormHeading = document.getElementById('recurring-form-heading');
+  const recurringTypeToggle = document.getElementById('recurring-type-toggle');
+  const recurringCategorySelect = document.getElementById('recurring-category');
+  const recurringAmountInput = document.getElementById('recurring-amount');
+  const recurringDayInput = document.getElementById('recurring-day');
+  const recurringStartMonthInput = document.getElementById('recurring-start-month');
+  const recurringMemoInput = document.getElementById('recurring-memo');
+  const recurringSaveBtn = document.getElementById('recurring-save');
+  const recurringModalClose = document.getElementById('recurring-modal-close');
 
   dateInput.value = new Date().toISOString().slice(0, 10);
 
@@ -1088,6 +1157,229 @@
       updateSharedAvailability();
     });
   });
+
+  let recurringType = '支出';
+  let editingRecurringId = null;
+
+  function resetRecurringForm() {
+    editingRecurringId = null;
+    recurringFormHeading.textContent = '新しく登録';
+    recurringSaveBtn.textContent = '登録する';
+    recurringAmountInput.value = '';
+    recurringDayInput.value = '';
+    recurringMemoInput.value = '';
+    recurringStartMonthInput.value = new Date().toISOString().slice(0, 7);
+  }
+
+  function renderRecurringCategorySelect() {
+    const categories = getCategoriesForType(recurringType);
+    const current = recurringCategorySelect.value;
+    recurringCategorySelect.innerHTML = '';
+    for (const cat of categories) {
+      const opt = document.createElement('option');
+      opt.value = cat.name;
+      opt.textContent = cat.icon + ' ' + cat.name;
+      recurringCategorySelect.appendChild(opt);
+    }
+    if (categories.some((c) => c.name === current)) {
+      recurringCategorySelect.value = current;
+    }
+  }
+
+  function renderRecurringList() {
+    recurringList.innerHTML = '';
+    if (recurringRules.length === 0) {
+      recurringList.innerHTML = '<p style="color:var(--muted); font-size:0.85rem;">まだ登録されていません</p>';
+      return;
+    }
+    for (const rule of recurringRules) {
+      const color = colorForCategory(rule.category);
+      const icon = iconForCategory(rule.category);
+      const typeLabel = rule.type === '2人の支出' ? '🤝 2人の支出' : rule.type;
+      const row = document.createElement('div');
+      row.className = 'category-manage-row';
+      row.innerHTML = `
+        <span class="icon-circle" style="background:${color}">${icon}</span>
+        <span class="cat-manage-name">${escapeHtml(rule.category)}(毎月${rule.day}日・${typeLabel})<br>
+          <span style="color:var(--muted); font-weight:400; font-size:0.78rem;">${formatYen(rule.amount)}${rule.memo ? ' ・ ' + escapeHtml(rule.memo) : ''}</span>
+        </span>
+        <button type="button" class="cat-edit-btn" data-id="${rule.id}">編集</button>
+        <button type="button" class="cat-delete-btn" data-id="${rule.id}">削除</button>
+      `;
+      recurringList.appendChild(row);
+    }
+  }
+
+  function openRecurringModal() {
+    recurringType = '支出';
+    recurringTypeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b.dataset.type === '支出'));
+    renderRecurringCategorySelect();
+    resetRecurringForm();
+    renderRecurringList();
+    recurringModalOverlay.style.display = 'flex';
+  }
+
+  recurringManageBtn.addEventListener('click', openRecurringModal);
+
+  recurringModalClose.addEventListener('click', () => {
+    recurringModalOverlay.style.display = 'none';
+  });
+
+  recurringTypeToggle.querySelectorAll('.type-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      recurringType = btn.dataset.type;
+      recurringTypeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      renderRecurringCategorySelect();
+    });
+  });
+
+  recurringSaveBtn.addEventListener('click', () => {
+    const amount = Number(recurringAmountInput.value);
+    const day = Number(recurringDayInput.value);
+    const startMonth = recurringStartMonthInput.value;
+    const category = recurringCategorySelect.value;
+    const memo = recurringMemoInput.value.trim();
+
+    if (!amount || amount <= 0 || !day || day < 1 || day > 31 || !startMonth || !category) return;
+
+    if (editingRecurringId) {
+      const idx = recurringRules.findIndex((r) => r.id === editingRecurringId);
+      if (idx !== -1) {
+        recurringRules[idx] = {
+          ...recurringRules[idx],
+          type: recurringType,
+          category,
+          amount,
+          day,
+          startMonth,
+          memo,
+        };
+      }
+    } else {
+      recurringRules.push({
+        id: Date.now(),
+        type: recurringType,
+        category,
+        amount,
+        day,
+        startMonth,
+        memo,
+        person: currentPerson,
+      });
+    }
+
+    persistRecurring();
+    resetRecurringForm();
+    renderRecurringList();
+    applyRecurringRules();
+  });
+
+  recurringList.addEventListener('click', (e) => {
+    const id = Number(e.target.dataset.id);
+    if (!id) return;
+
+    if (e.target.classList.contains('cat-edit-btn')) {
+      const rule = recurringRules.find((r) => r.id === id);
+      if (!rule) return;
+      editingRecurringId = id;
+      recurringFormHeading.textContent = '編集';
+      recurringSaveBtn.textContent = '更新する';
+      recurringType = rule.type;
+      recurringTypeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b.dataset.type === rule.type));
+      renderRecurringCategorySelect();
+      recurringCategorySelect.value = rule.category;
+      recurringAmountInput.value = rule.amount;
+      recurringDayInput.value = rule.day;
+      recurringStartMonthInput.value = rule.startMonth;
+      recurringMemoInput.value = rule.memo || '';
+    } else if (e.target.classList.contains('cat-delete-btn')) {
+      recurringRules = recurringRules.filter((r) => r.id !== id);
+      if (editingRecurringId === id) resetRecurringForm();
+      persistRecurring();
+      renderRecurringList();
+    }
+  });
+
+  function nextMonthStr(monthStr) {
+    const [y, m] = monthStr.split('-').map(Number);
+    return new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
+  }
+
+  function applyRecurringRules() {
+    if (!recurringRules.length) return;
+    const todayMonth = monthOf(new Date().toISOString().slice(0, 10));
+    const newRecords = [];
+    const idBase = Date.now();
+    let idOffset = 0;
+
+    for (const rule of recurringRules) {
+      let month = rule.startMonth;
+      let guard = 0;
+      while (month <= todayMonth && guard < 600) {
+        guard++;
+        const alreadyExists = expenses.some((e) => e.recurringId === rule.id && monthOf(e.date) === month);
+        if (!alreadyExists) {
+          const [y, m] = month.split('-').map(Number);
+          const lastDay = new Date(y, m, 0).getDate();
+          const day = Math.min(rule.day, lastDay);
+          const dateStr = `${month}-${String(day).padStart(2, '0')}`;
+
+          if (rule.type === '2人の支出') {
+            const sharedId = idBase + (idOffset++);
+            const half1 = Math.ceil(rule.amount / 2);
+            const half2 = rule.amount - half1;
+            const halves = [half1, half2];
+            newRecords.push({
+              id: sharedId,
+              amount: rule.amount,
+              category: rule.category,
+              date: dateStr,
+              type: '支出',
+              shared: true,
+              memo: rule.memo || '',
+              recurringId: rule.id,
+            });
+            people.slice(0, 2).forEach((personName, i) => {
+              newRecords.push({
+                id: sharedId + i + 1,
+                amount: halves[i],
+                category: rule.category + '(2人)',
+                date: dateStr,
+                type: '支出',
+                person: personName,
+                splitGroupId: sharedId,
+                memo: rule.memo || '',
+                recurringId: rule.id,
+              });
+            });
+            idOffset += 2;
+          } else {
+            newRecords.push({
+              id: idBase + (idOffset++),
+              amount: rule.amount,
+              category: rule.category,
+              date: dateStr,
+              type: rule.type,
+              person: rule.person,
+              memo: rule.memo || '',
+              recurringId: rule.id,
+            });
+          }
+        }
+        month = nextMonthStr(month);
+      }
+    }
+
+    if (newRecords.length > 0) {
+      writeRecords(newRecords);
+    }
+  }
+
+  let recurringApplyTimer = null;
+  function scheduleApplyRecurring() {
+    if (recurringApplyTimer) clearTimeout(recurringApplyTimer);
+    recurringApplyTimer = setTimeout(applyRecurringRules, 800);
+  }
 
   renderCategoryGrid();
 
@@ -1303,6 +1595,7 @@
       expensesCollection = db.collection('expenses');
       peopleDoc = db.collection('meta').doc('people');
       categoriesDoc = db.collection('meta').doc('categories');
+      recurringDoc = db.collection('meta').doc('recurring');
 
       expensesCollection.onSnapshot(
         (snapshot) => {
@@ -1310,6 +1603,7 @@
           persistExpenses();
           render();
           setSyncStatus('🟢 2人で同期中');
+          scheduleApplyRecurring();
         },
         (error) => {
           console.error('Firestore sync error', error);
@@ -1324,6 +1618,7 @@
           persistPeopleLocal(people);
           updateSharedAvailability();
           if (nameModalOverlay.style.display === 'flex') openNameModal();
+          scheduleApplyRecurring();
         },
         (error) => {
           console.error('people sync error', error);
@@ -1348,6 +1643,19 @@
         },
         (error) => {
           console.error('categories sync error', error);
+        }
+      );
+
+      recurringDoc.onSnapshot(
+        (doc) => {
+          const data = doc.data();
+          recurringRules = (data && Array.isArray(data.rules)) ? data.rules : [];
+          persistRecurringLocal(recurringRules);
+          if (recurringModalOverlay.style.display === 'flex') renderRecurringList();
+          scheduleApplyRecurring();
+        },
+        (error) => {
+          console.error('recurring sync error', error);
         }
       );
     } catch (err) {
@@ -1927,6 +2235,10 @@
   }
 
   render();
+
+  if (!isFirebaseConfigured) {
+    applyRecurringRules();
+  }
 
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
     window.addEventListener('load', () => {
