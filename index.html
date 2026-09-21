@@ -156,7 +156,6 @@
     position: fixed;
     right: 0;
     top: 50%;
-    transform: translateY(-50%);
     z-index: 40;
     background: linear-gradient(135deg, var(--primary), var(--accent));
     color: #fff;
@@ -165,8 +164,12 @@
     box-shadow: -4px 4px 16px -6px rgba(255, 159, 90, 0.55);
     font-size: 1.3rem;
     line-height: 1;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
-  .calc-tab:active { transform: translateY(-50%) scale(0.95); }
+  .calc-tab:active { transform: scale(0.95); }
+  .calc-tab.dragging { opacity: 0.85; }
 
   .calc-backdrop {
     display: none;
@@ -181,7 +184,6 @@
     position: fixed;
     right: 12px;
     top: 50%;
-    transform: translateY(-50%);
     z-index: 50;
     width: 240px;
     background: var(--card-bg);
@@ -279,6 +281,12 @@
     flex: 1;
     font-size: 0.9rem;
   }
+  .category-manage-row .cat-manage-budget {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--muted);
+    font-weight: 400;
+  }
   .category-manage-row button {
     background: none;
     font-size: 0.78rem;
@@ -300,6 +308,7 @@
     gap: 8px;
   }
   .category-edit-row input[type="text"]:last-child { flex: 1; }
+  #category-edit-budget { flex: 1; }
   #category-edit-icon { width: 64px; text-align: center; }
   #category-edit-color {
     width: 44px;
@@ -499,14 +508,16 @@
     font-size: 0.85rem;
   }
   .legend li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
     padding: 6px 0;
     border-bottom: 1px solid var(--border);
   }
   .legend li:last-child { border-bottom: none; }
+  .legend .legend-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
   .legend .legend-name {
     display: flex;
     align-items: center;
@@ -527,6 +538,16 @@
   .legend .legend-value strong {
     color: var(--text);
     font-variant-numeric: tabular-nums;
+  }
+  .legend .legend-value strong.over-budget { color: var(--danger); }
+  .legend-budget-line {
+    margin: 2px 0 0 18px;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .legend-budget-line.over-budget {
+    color: var(--danger);
+    font-weight: 700;
   }
 
   .month-cell { white-space: nowrap; color: var(--muted); font-weight: 600; }
@@ -786,6 +807,9 @@
       <input type="text" id="category-edit-icon" placeholder="絵文字" maxlength="4">
       <input type="color" id="category-edit-color" value="#4C78A8">
       <input type="text" id="category-edit-name" placeholder="カテゴリ名">
+    </div>
+    <div class="category-edit-row" id="category-edit-budget-row" style="margin-top:8px;">
+      <input type="number" id="category-edit-budget" placeholder="月の目標金額(円・任意)" min="0" step="1">
     </div>
     <button type="button" id="category-edit-save" class="submit-btn" style="margin-top:10px;">追加する</button>
     <button type="button" id="category-modal-close" class="cat-manage-link" style="margin-top:14px; width:100%; text-align:center;">閉じる</button>
@@ -1256,6 +1280,8 @@
   const categoryEditIcon = document.getElementById('category-edit-icon');
   const categoryEditColor = document.getElementById('category-edit-color');
   const categoryEditName = document.getElementById('category-edit-name');
+  const categoryEditBudgetRow = document.getElementById('category-edit-budget-row');
+  const categoryEditBudget = document.getElementById('category-edit-budget');
   const categoryEditSave = document.getElementById('category-edit-save');
   const categoryModalClose = document.getElementById('category-modal-close');
 
@@ -1298,6 +1324,10 @@
   }
   function iconForCategory(name) {
     return CATEGORY_ICONS[baseCategoryName(name)] || '';
+  }
+  function budgetForCategory(name) {
+    const cat = EXPENSE_CATEGORIES.find((c) => c.name === baseCategoryName(name));
+    return cat && cat.budget ? cat.budget : null;
   }
   function escapeHtml(text) {
     const div = document.createElement('div');
@@ -1355,6 +1385,7 @@
     categoryEditName.value = '';
     categoryEditIcon.value = '';
     categoryEditColor.value = '#4C78A8';
+    categoryEditBudget.value = '';
     categoryEditSave.textContent = '追加する';
   }
 
@@ -1366,7 +1397,7 @@
       row.className = 'category-manage-row';
       row.innerHTML = `
         <span class="icon-circle" style="background:${cat.color}">${cat.icon}</span>
-        <span class="cat-manage-name">${escapeHtml(cat.name)}</span>
+        <span class="cat-manage-name">${escapeHtml(cat.name)}${cat.budget ? `<span class="cat-manage-budget">目標 ¥${cat.budget.toLocaleString()}/月</span>` : ''}</span>
         <button type="button" class="cat-move-btn" data-name="${escapeHtml(cat.name)}" data-dir="up" ${idx === 0 ? 'disabled' : ''}>▲</button>
         <button type="button" class="cat-move-btn" data-name="${escapeHtml(cat.name)}" data-dir="down" ${idx === list.length - 1 ? 'disabled' : ''}>▼</button>
         <button type="button" class="cat-edit-btn" data-name="${escapeHtml(cat.name)}">編集</button>
@@ -1381,6 +1412,7 @@
     categoryModalTypeToggle.querySelectorAll('.type-btn').forEach((b) => {
       b.classList.toggle('active', b.dataset.type === categoryModalType);
     });
+    categoryEditBudgetRow.style.display = categoryModalType === '支出' ? 'flex' : 'none';
     resetCategoryEditForm();
     renderCategoryManageList();
     categoryModalOverlay.style.display = 'flex';
@@ -1396,6 +1428,7 @@
     btn.addEventListener('click', () => {
       categoryModalType = btn.dataset.type;
       categoryModalTypeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      categoryEditBudgetRow.style.display = categoryModalType === '支出' ? 'flex' : 'none';
       resetCategoryEditForm();
       renderCategoryManageList();
     });
@@ -1407,14 +1440,17 @@
     const color = categoryEditColor.value;
     if (!name) return;
 
+    const budgetRaw = categoryModalType === '支出' ? Number(categoryEditBudget.value) : 0;
+    const budget = budgetRaw > 0 ? budgetRaw : undefined;
+
     const list = getCategoriesForType(categoryModalType);
 
     if (editingCategoryName) {
       const idx = list.findIndex((c) => c.name === editingCategoryName);
-      if (idx !== -1) list[idx] = { name, icon, color };
+      if (idx !== -1) list[idx] = { name, icon, color, ...(budget ? { budget } : {}) };
     } else {
       if (list.some((c) => c.name === name)) return;
-      list.push({ name, icon, color });
+      list.push({ name, icon, color, ...(budget ? { budget } : {}) });
     }
 
     persistCategories();
@@ -1446,6 +1482,7 @@
       categoryEditName.value = cat.name;
       categoryEditIcon.value = cat.icon;
       categoryEditColor.value = cat.color;
+      categoryEditBudget.value = cat.budget || '';
       categoryEditSave.textContent = '更新する';
     } else if (e.target.classList.contains('cat-delete-btn')) {
       if (list.length <= 1) return;
@@ -1555,9 +1592,69 @@
     calcRender();
   }
 
+  const CALC_TAB_POS_KEY = 'kakeibo-calc-tab-top';
+  const CALC_TAB_MARGIN = 12;
+
+  function clampCalcTabTop(top) {
+    const maxTop = window.innerHeight - calcTab.offsetHeight - CALC_TAB_MARGIN;
+    return Math.min(Math.max(top, CALC_TAB_MARGIN), Math.max(CALC_TAB_MARGIN, maxTop));
+  }
+
+  function loadCalcTabPosition() {
+    let top = window.innerHeight / 2 - calcTab.offsetHeight / 2;
+    try {
+      const saved = localStorage.getItem(CALC_TAB_POS_KEY);
+      if (saved != null) top = Number(saved);
+    } catch {
+      // ignore
+    }
+    calcTab.style.top = clampCalcTabTop(top) + 'px';
+  }
+  loadCalcTabPosition();
+
+  window.addEventListener('resize', () => {
+    const current = parseFloat(calcTab.style.top) || 0;
+    calcTab.style.top = clampCalcTabTop(current) + 'px';
+  });
+
+  let calcDrag = null;
+
+  calcTab.addEventListener('pointerdown', (e) => {
+    calcDrag = { startY: e.clientY, startTop: calcTab.getBoundingClientRect().top, moved: false };
+    calcTab.setPointerCapture(e.pointerId);
+    calcTab.classList.add('dragging');
+  });
+
+  calcTab.addEventListener('pointermove', (e) => {
+    if (!calcDrag) return;
+    const dy = e.clientY - calcDrag.startY;
+    if (Math.abs(dy) > 4) calcDrag.moved = true;
+    calcTab.style.top = clampCalcTabTop(calcDrag.startTop + dy) + 'px';
+  });
+
+  function endCalcDrag() {
+    if (!calcDrag) return;
+    calcTab.classList.remove('dragging');
+    if (calcDrag.moved) {
+      try {
+        localStorage.setItem(CALC_TAB_POS_KEY, String(parseFloat(calcTab.style.top)));
+      } catch {
+        // ignore
+      }
+    }
+    calcTab.dataset.justDragged = calcDrag.moved ? '1' : '0';
+    calcDrag = null;
+  }
+  calcTab.addEventListener('pointerup', endCalcDrag);
+  calcTab.addEventListener('pointercancel', endCalcDrag);
+
   function openCalc() {
     calcBackdrop.style.display = 'block';
     calcPanel.style.display = 'block';
+    const tabRect = calcTab.getBoundingClientRect();
+    let top = tabRect.top + tabRect.height / 2 - calcPanel.offsetHeight / 2;
+    top = Math.min(Math.max(top, CALC_TAB_MARGIN), window.innerHeight - calcPanel.offsetHeight - CALC_TAB_MARGIN);
+    calcPanel.style.top = top + 'px';
   }
 
   function closeCalc() {
@@ -1565,7 +1662,13 @@
     calcPanel.style.display = 'none';
   }
 
-  calcTab.addEventListener('click', openCalc);
+  calcTab.addEventListener('click', () => {
+    if (calcTab.dataset.justDragged === '1') {
+      calcTab.dataset.justDragged = '0';
+      return;
+    }
+    openCalc();
+  });
   calcClose.addEventListener('click', closeCalc);
   calcBackdrop.addEventListener('click', closeCalc);
 
@@ -2266,9 +2369,17 @@
 
       const li = document.createElement('li');
       const percent = ((amount / grandTotal) * 100).toFixed(1);
+      const budget = budgetForCategory(category);
+      const over = budget != null && amount > budget;
+      const budgetLine = budget != null
+        ? `<div class="legend-budget-line${over ? ' over-budget' : ''}">🎯 目標 ¥${budget.toLocaleString()}${over ? '・オーバーしています' : ''}</div>`
+        : '';
       li.innerHTML = `
-        <span class="legend-name"><span class="swatch" style="background:${color}"></span>${category}</span>
-        <span class="legend-value"><strong>${formatYen(amount)}</strong> (${percent}%)</span>
+        <div class="legend-row">
+          <span class="legend-name"><span class="swatch" style="background:${color}"></span>${category}</span>
+          <span class="legend-value"><strong${over ? ' class="over-budget"' : ''}>${formatYen(amount)}</strong> (${percent}%)</span>
+        </div>
+        ${budgetLine}
       `;
       els.legend.appendChild(li);
     }
