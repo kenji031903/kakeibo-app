@@ -152,14 +152,19 @@
     font-weight: 700;
   }
 
+  .receipt-scan-row {
+    display: flex;
+    gap: 8px;
+  }
   .receipt-scan-btn {
     display: block;
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     background: #fff8f0;
     color: var(--primary-dark);
-    font-size: 0.88rem;
+    font-size: 0.85rem;
     font-weight: 700;
-    padding: 12px;
+    padding: 12px 6px;
     text-align: center;
     border: 1.5px dashed var(--primary);
     border-radius: 14px;
@@ -172,6 +177,49 @@
     color: var(--muted);
     margin-top: 6px;
     text-align: center;
+  }
+
+  .receipt-review-list {
+    max-height: 280px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2px 10px;
+  }
+  .receipt-review-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+  }
+  .receipt-review-row:last-child { border-bottom: none; }
+  .receipt-review-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .receipt-review-cat {
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  .receipt-review-price { font-weight: 700; white-space: nowrap; }
+  .receipt-review-summary {
+    margin-top: 10px;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .receipt-review-summary div {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
   }
 
   .category-manage-list {
@@ -733,6 +781,27 @@
   </div>
 </div>
 
+<div id="receipt-review-modal-overlay" class="name-modal-overlay" style="display:none;">
+  <div class="name-modal">
+    <h2>レシート内容を確認</h2>
+    <p style="font-size:0.78rem; color:var(--muted); margin:-6px 0 10px;">
+      商品名から仮のカテゴリに振り分けました。項目をチェックして下のカテゴリを押すと、まとめて変更できます。
+    </p>
+    <label for="receipt-review-date">日付</label>
+    <input type="date" id="receipt-review-date" style="margin-bottom:10px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <span style="font-size:0.78rem; color:var(--muted);" id="receipt-review-count"></span>
+      <button type="button" id="receipt-review-toggle-all" class="cat-manage-link" style="padding:0;">全て選択/解除</button>
+    </div>
+    <div id="receipt-review-list" class="receipt-review-list"></div>
+    <label style="margin-top:12px;">チェックした項目をこのカテゴリに変更</label>
+    <div class="category-grid" id="receipt-review-category-grid"></div>
+    <div id="receipt-review-summary" class="receipt-review-summary"></div>
+    <button type="button" id="receipt-review-save" class="submit-btn" style="margin-top:12px;">この内容で登録する</button>
+    <button type="button" id="receipt-review-close" class="cat-manage-link" style="margin-top:10px; width:100%; text-align:center;">閉じる</button>
+  </div>
+</div>
+
 <div class="container">
   <h1>かんたん家計簿</h1>
   <div class="sync-status" id="sync-status">読み込み中...</div>
@@ -754,8 +823,12 @@
       <p class="shared-warning" id="shared-warning" style="display:none;"></p>
       <input type="hidden" id="type" value="支出">
       <div class="full">
-        <button type="button" id="receipt-scan-btn" class="receipt-scan-btn">📷 レシートを撮影して自動入力</button>
-        <input type="file" id="receipt-input" accept="image/*" capture="environment" style="display:none;">
+        <div class="receipt-scan-row">
+          <button type="button" id="receipt-scan-btn" class="receipt-scan-btn">📷 撮影して自動入力</button>
+          <button type="button" id="receipt-file-btn" class="receipt-scan-btn">🗂 ファイルから選択</button>
+        </div>
+        <input type="file" id="receipt-camera-input" accept="image/*" capture="environment" style="display:none;">
+        <input type="file" id="receipt-file-input" accept="image/*" style="display:none;">
         <p id="receipt-status" class="receipt-status"></p>
       </div>
       <div class="full">
@@ -1065,8 +1138,19 @@
   const memoInput = document.getElementById('memo');
   const submitBtn = document.getElementById('submit-btn');
   const receiptScanBtn = document.getElementById('receipt-scan-btn');
-  const receiptInput = document.getElementById('receipt-input');
+  const receiptFileBtn = document.getElementById('receipt-file-btn');
+  const receiptCameraInput = document.getElementById('receipt-camera-input');
+  const receiptFileInput = document.getElementById('receipt-file-input');
   const receiptStatus = document.getElementById('receipt-status');
+  const receiptReviewModalOverlay = document.getElementById('receipt-review-modal-overlay');
+  const receiptReviewDateInput = document.getElementById('receipt-review-date');
+  const receiptReviewList = document.getElementById('receipt-review-list');
+  const receiptReviewCategoryGrid = document.getElementById('receipt-review-category-grid');
+  const receiptReviewSummary = document.getElementById('receipt-review-summary');
+  const receiptReviewCount = document.getElementById('receipt-review-count');
+  const receiptReviewToggleAll = document.getElementById('receipt-review-toggle-all');
+  const receiptReviewSave = document.getElementById('receipt-review-save');
+  const receiptReviewClose = document.getElementById('receipt-review-close');
   const sharedWarning = document.getElementById('shared-warning');
   const monthFilter = document.getElementById('month-filter');
   const sharedMonthFilter = document.getElementById('shared-month-filter');
@@ -1360,8 +1444,24 @@
     { name: '住居・水道光熱費', words: ['電気', 'ガス料金', '水道', '家賃', 'NHK'] },
   ];
 
-  // Matches a number token on the same line: either ¥1,234 / ￥1234 style, or 1,234円 style.
+  // 商品名(レシートの明細1行ずつ)からカテゴリを推測するための、よりきめ細かいキーワード。
+  const RECEIPT_ITEM_CATEGORY_KEYWORDS = [
+    { name: '日用品', words: ['シャンプー', 'リンス', '洗剤', 'ティッシュ', 'トイレット', '歯ブラシ', '歯磨き', 'タオル', '電池', 'マスク', '入浴剤'] },
+    { name: '食費', words: ['ビール', 'ハイボール', 'チューハイ', 'サワー', 'ワイン', '日本酒', '焼酎', 'タコハイ', 'ポテト', '弁当', 'パン', '野菜', 'サラダ', '肉', '魚', '惣菜', '飲料', 'お茶', 'コーヒー', '菓子', 'チョコ', 'アイス', '麺', '豆腐', '卵', '牛乳', 'ヨーグルト', 'おにぎり', 'カレー'] },
+    { name: '趣味・娯楽', words: ['雑誌', 'コミック', 'DVD'] },
+  ];
+
+  // 同一行内の金額表記(¥1,234 / ￥1234 / 1,234円)を1つ拾う。
   const LINE_AMOUNT_RE = /(?:[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})*|[0-9]{2,9}))|(?:([0-9]{1,3}(?:,[0-9]{3})*|[0-9]{2,9})\s*円)/;
+  // 行末に金額がある明細行だけを拾う(商品名の直後に価格が来る一般的なレシート書式)。
+  const LINE_END_AMOUNT_RE = /(?:[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})*|[0-9]{2,9})|([0-9]{1,3}(?:,[0-9]{3})*|[0-9]{2,9})\s*円)\s*$/;
+  // 合計・小計・レジ処理などの明細以外の行を除外する。
+  const RECEIPT_SKIP_LINE_RE = /合計|小計|お会計|総額|税|クレジット|お釣り|現金|Cash|レジ|様|TEL|番号|期限|外\d+%|対象|割引|点$/;
+  const LEADING_ITEM_CODE_RE = /^[A-Za-z]?\d{4,8}[＊*]?\s*/;
+
+  function normalizeReceiptText(text) {
+    return text.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+  }
 
   function extractTotalAmount(normalized) {
     const lines = normalized.split('\n');
@@ -1383,24 +1483,58 @@
     return allCandidates.length ? Math.max(...allCandidates) : null;
   }
 
-  function parseReceiptText(text) {
-    const normalized = text.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+  function extractReceiptDate(normalized) {
+    const m1 = normalized.match(/(20[0-9]{2})年\s*(\d{1,2})月\s*(\d{1,2})日/);
+    if (m1) return `${m1[1]}-${m1[2].padStart(2, '0')}-${m1[3].padStart(2, '0')}`;
+    const m2 = normalized.match(/(20[0-9]{2})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (m2) return `${m2[1]}-${m2[2].padStart(2, '0')}-${m2[3].padStart(2, '0')}`;
+    return null;
+  }
 
+  function findMatchedStoreKeyword(normalized) {
+    for (const entry of RECEIPT_CATEGORY_KEYWORDS) {
+      const found = entry.words.find((w) => normalized.includes(w));
+      if (found) return { categoryName: entry.name, word: found };
+    }
+    return null;
+  }
+
+  function guessItemCategory(name, categories) {
+    for (const entry of RECEIPT_ITEM_CATEGORY_KEYWORDS) {
+      if (categories.some((c) => c.name === entry.name) && entry.words.some((w) => name.includes(w))) {
+        return entry.name;
+      }
+    }
+    const fallback = categories.find((c) => c.name === 'その他') || categories[0];
+    return fallback ? fallback.name : '';
+  }
+
+  function parseReceiptItems(normalized, categories) {
+    const items = [];
+    for (const rawLine of normalized.split('\n')) {
+      const line = rawLine.trim();
+      if (!line || RECEIPT_SKIP_LINE_RE.test(line)) continue;
+      const m = line.match(LINE_END_AMOUNT_RE);
+      if (!m) continue;
+      const amount = Number((m[1] || m[2]).replace(/,/g, ''));
+      if (!amount || amount <= 0) continue;
+
+      let name = line.slice(0, m.index).trim().replace(LEADING_ITEM_CODE_RE, '').replace(/\s+/g, ' ').trim();
+      if (!name) name = '商品';
+      name = name.slice(0, 24);
+
+      items.push({ name, amount, category: guessItemCategory(name, categories) });
+    }
+    return items;
+  }
+
+  // 明細を1行ずつ拾えなかった場合の保険として、合計金額とお店のカテゴリだけを推測する。
+  function parseReceiptFallback(normalized) {
     let amount = extractTotalAmount(normalized);
     if (!amount || !Number.isFinite(amount) || amount <= 0) amount = null;
 
-    let categoryName = null;
-    let matchedWord = null;
-    for (const entry of RECEIPT_CATEGORY_KEYWORDS) {
-      const found = entry.words.find((w) => normalized.includes(w));
-      if (found) {
-        categoryName = entry.name;
-        matchedWord = found;
-        break;
-      }
-    }
-
-    let memo = matchedWord;
+    const storeMatch = findMatchedStoreKeyword(normalized);
+    let memo = storeMatch ? storeMatch.word : null;
     if (!memo) {
       memo = normalized
         .split('\n')
@@ -1408,48 +1542,173 @@
         .find((l) => l.length >= 2 && l.length <= 20 && !/^[0-9\-\s]+$/.test(l));
     }
 
-    return { amount, categoryName, memo: memo ? memo.slice(0, 20) : '' };
+    return { amount, categoryName: storeMatch ? storeMatch.categoryName : null, memo: memo ? memo.slice(0, 20) : '' };
   }
 
-  receiptScanBtn.addEventListener('click', () => receiptInput.click());
+  let receiptItems = [];
+  let receiptMemoGuess = '';
 
-  receiptInput.addEventListener('change', async () => {
-    const file = receiptInput.files[0];
-    receiptInput.value = '';
+  function renderReceiptReviewCategoryGrid() {
+    const categories = getCategoriesForType('支出');
+    receiptReviewCategoryGrid.innerHTML = '';
+    for (const cat of categories) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'category-btn';
+      btn.innerHTML = `
+        <span class="icon-circle" style="background:${cat.color}">${cat.icon}</span>
+        <span class="cat-label">${cat.name}</span>
+      `;
+      btn.addEventListener('click', () => {
+        const checked = [...receiptReviewList.querySelectorAll('.receipt-review-check:checked')];
+        if (checked.length === 0) return;
+        checked.forEach((cb) => {
+          receiptItems[Number(cb.dataset.idx)].category = cat.name;
+        });
+        renderReceiptReviewList();
+      });
+      receiptReviewCategoryGrid.appendChild(btn);
+    }
+  }
+
+  function renderReceiptReviewList() {
+    receiptReviewList.innerHTML = '';
+    receiptItems.forEach((item, idx) => {
+      const row = document.createElement('label');
+      row.className = 'receipt-review-row';
+      row.innerHTML = `
+        <input type="checkbox" class="receipt-review-check" data-idx="${idx}">
+        <span class="receipt-review-name">${escapeHtml(item.name)}</span>
+        <span class="receipt-review-cat" style="background:${colorForCategory(item.category)}">${iconForCategory(item.category)} ${escapeHtml(item.category)}</span>
+        <span class="receipt-review-price">¥${item.amount.toLocaleString()}</span>
+      `;
+      receiptReviewList.appendChild(row);
+    });
+    receiptReviewCount.textContent = `${receiptItems.length}件の商品`;
+
+    const totals = {};
+    for (const item of receiptItems) {
+      totals[item.category] = (totals[item.category] || 0) + item.amount;
+    }
+    receiptReviewSummary.innerHTML = Object.entries(totals)
+      .map(
+        ([cat, sum]) =>
+          `<div><span>${iconForCategory(cat)} ${escapeHtml(cat)}</span><span>¥${sum.toLocaleString()}</span></div>`
+      )
+      .join('');
+  }
+
+  function openReceiptReviewModal(items, dateGuess, memoGuess) {
+    receiptItems = items;
+    receiptMemoGuess = memoGuess || '';
+    receiptReviewDateInput.value = dateGuess || new Date().toISOString().slice(0, 10);
+    renderReceiptReviewCategoryGrid();
+    renderReceiptReviewList();
+    receiptReviewModalOverlay.style.display = 'flex';
+  }
+
+  receiptReviewToggleAll.addEventListener('click', () => {
+    const boxes = [...receiptReviewList.querySelectorAll('.receipt-review-check')];
+    const allChecked = boxes.length > 0 && boxes.every((b) => b.checked);
+    boxes.forEach((b) => {
+      b.checked = !allChecked;
+    });
+  });
+
+  receiptReviewClose.addEventListener('click', () => {
+    receiptReviewModalOverlay.style.display = 'none';
+  });
+
+  receiptReviewSave.addEventListener('click', () => {
+    if (!receiptItems.length || !receiptReviewDateInput.value) return;
+
+    const totals = {};
+    for (const item of receiptItems) {
+      totals[item.category] = (totals[item.category] || 0) + item.amount;
+    }
+
+    const idBase = Date.now();
+    const records = Object.entries(totals)
+      .filter(([, amount]) => amount > 0)
+      .map(([category, amount], i) => ({
+        id: idBase + i,
+        amount,
+        category,
+        date: receiptReviewDateInput.value,
+        type: '支出',
+        person: currentPerson,
+        memo: receiptMemoGuess,
+      }));
+
+    writeRecords(records);
+    receiptReviewModalOverlay.style.display = 'none';
+  });
+
+  async function handleReceiptFile(file) {
     if (!file) return;
 
     receiptScanBtn.disabled = true;
+    receiptFileBtn.disabled = true;
     receiptStatus.style.display = 'block';
     receiptStatus.textContent = '📷 レシートを読み取り中...(数十秒かかることがあります)';
 
     try {
       await loadTesseract();
       const { data } = await Tesseract.recognize(file, 'jpn+eng');
-      const { amount, categoryName, memo } = parseReceiptText(data.text || '');
+      const normalized = normalizeReceiptText(data.text || '');
+      const categories = getCategoriesForType('支出');
+      const items = parseReceiptItems(normalized, categories);
+      const dateGuess = extractReceiptDate(normalized);
+      const storeMatch = findMatchedStoreKeyword(normalized);
 
-      setFormType('支出');
-      if (amount) amountInput.value = amount;
-      if (categoryName) {
-        const match = getCategoriesForType('支出').find((c) => c.name === categoryName);
-        if (match) {
-          categoryInput.value = match.name;
-          renderCategoryGrid();
+      if (items.length > 0) {
+        openReceiptReviewModal(items, dateGuess, storeMatch ? storeMatch.word : '');
+        receiptStatus.style.display = 'none';
+      } else {
+        // 明細を1行ずつ拾えなかった場合は、これまで通り合計金額だけをフォームに入力する。
+        const { amount, categoryName, memo } = parseReceiptFallback(normalized);
+        setFormType('支出');
+        if (amount) amountInput.value = amount;
+        if (categoryName) {
+          const match = categories.find((c) => c.name === categoryName);
+          if (match) {
+            categoryInput.value = match.name;
+            renderCategoryGrid();
+          }
         }
-      }
-      if (memo) memoInput.value = memo;
+        if (memo) memoInput.value = memo;
 
-      receiptStatus.textContent = amount
-        ? '✅ 読み取りました。内容を確認して「追加する」を押してください。'
-        : '⚠️ 金額をうまく読み取れませんでした。手入力で確認してください。';
+        receiptStatus.textContent = amount
+          ? '✅ 商品明細は検出できませんでしたが、合計金額を入力しました。内容を確認して「追加する」を押してください。'
+          : '⚠️ 読み取れませんでした。手入力で確認してください。';
+      }
     } catch (err) {
       console.error('receipt OCR failed', err);
       receiptStatus.textContent = '⚠️ 読み取りに失敗しました。もう一度お試しください。';
     } finally {
       receiptScanBtn.disabled = false;
-      setTimeout(() => {
-        receiptStatus.style.display = 'none';
-      }, 6000);
+      receiptFileBtn.disabled = false;
+      if (receiptStatus.style.display !== 'none') {
+        setTimeout(() => {
+          receiptStatus.style.display = 'none';
+        }, 6000);
+      }
     }
+  }
+
+  receiptScanBtn.addEventListener('click', () => receiptCameraInput.click());
+  receiptFileBtn.addEventListener('click', () => receiptFileInput.click());
+
+  receiptCameraInput.addEventListener('change', () => {
+    const file = receiptCameraInput.files[0];
+    receiptCameraInput.value = '';
+    handleReceiptFile(file);
+  });
+
+  receiptFileInput.addEventListener('change', () => {
+    const file = receiptFileInput.files[0];
+    receiptFileInput.value = '';
+    handleReceiptFile(file);
   });
 
   let recurringType = '支出';
