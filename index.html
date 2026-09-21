@@ -24,6 +24,7 @@
     --danger: #FF6B4A;
   }
   * { box-sizing: border-box; }
+  html, body { overflow-x: hidden; }
   body {
     margin: 0;
     font-family: "Hiragino Kaku Gothic ProN", "Meiryo", "Segoe UI", sans-serif;
@@ -34,6 +35,7 @@
     background-attachment: fixed;
     color: var(--text);
     padding: 24px 16px 60px;
+    width: 100%;
   }
   .container {
     max-width: 640px;
@@ -258,6 +260,10 @@
   .summary-item.balance .amount { color: var(--primary-dark); }
   .summary-item.balance .amount.negative { color: var(--danger); }
 
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
   table {
     width: 100%;
     border-collapse: collapse;
@@ -643,17 +649,19 @@
     <div class="empty" id="shared-bar-empty" style="display:none;">まだ記録がありません</div>
 
     <h2 style="margin-top:20px;">記録一覧</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>日付</th>
-          <th>カテゴリ</th>
-          <th style="text-align:right;">金額</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="shared-list"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>カテゴリ</th>
+            <th style="text-align:right;">金額</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="shared-list"></tbody>
+      </table>
+    </div>
     <div class="empty" id="shared-empty" style="display:none;">まだ記録がありません</div>
   </div>
 
@@ -668,33 +676,37 @@
 
   <div class="card">
     <h2>月別の合計</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>年月</th>
-          <th style="text-align:right;">収入</th>
-          <th style="text-align:right;">支出</th>
-          <th style="text-align:right;">収支</th>
-        </tr>
-      </thead>
-      <tbody id="month-summary"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>年月</th>
+            <th style="text-align:right;">収入</th>
+            <th style="text-align:right;">支出</th>
+            <th style="text-align:right;">収支</th>
+          </tr>
+        </thead>
+        <tbody id="month-summary"></tbody>
+      </table>
+    </div>
     <div class="empty" id="month-empty" style="display:none;">まだ記録がありません</div>
   </div>
 
   <div class="card">
     <h2 id="personal-list-heading">個人の記録一覧</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>日付</th>
-          <th>カテゴリ</th>
-          <th style="text-align:right;">金額</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="expense-list"></tbody>
-    </table>
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th>
+            <th>カテゴリ</th>
+            <th style="text-align:right;">金額</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="expense-list"></tbody>
+      </table>
+    </div>
     <div class="empty" id="empty-message" style="display:none;">まだ記録がありません</div>
   </div>
 </div>
