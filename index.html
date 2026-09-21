@@ -620,6 +620,12 @@
 
   <div class="card shared-card">
     <h2>🤝 2人の支出</h2>
+    <div class="filter-row">
+      <label for="shared-month-filter">表示する期間</label>
+      <select id="shared-month-filter">
+        <option value="all">すべての期間</option>
+      </select>
+    </div>
     <div class="summary-grid" style="grid-template-columns: 1fr;">
       <div class="summary-item expense">
         <span class="label">合計(表示中の期間)</span>
@@ -848,6 +854,7 @@
   const submitBtn = document.getElementById('submit-btn');
   const sharedWarning = document.getElementById('shared-warning');
   const monthFilter = document.getElementById('month-filter');
+  const sharedMonthFilter = document.getElementById('shared-month-filter');
   const listBody = document.getElementById('expense-list');
   const incomeEl = document.getElementById('income-amount');
   const expenseEl = document.getElementById('expense-amount');
@@ -1376,27 +1383,32 @@
 
   function getFilteredSharedExpenses() {
     const shared = getSharedExpenses();
-    if (monthFilter.value === 'all') return shared;
-    return shared.filter((e) => monthOf(e.date) === monthFilter.value);
+    if (sharedMonthFilter.value === 'all') return shared;
+    return shared.filter((e) => monthOf(e.date) === sharedMonthFilter.value);
   }
 
-  function renderMonthFilterOptions() {
-    const months = [...new Set(expenses.map((e) => monthOf(e.date)))].sort().reverse();
-    const current = monthFilter.value;
+  function renderMonthFilterOptionsFor(selectEl, records) {
+    const months = [...new Set(records.map((e) => monthOf(e.date)))].sort().reverse();
+    const current = selectEl.value;
 
-    monthFilter.innerHTML = '<option value="all">すべての期間</option>';
+    selectEl.innerHTML = '<option value="all">すべての期間</option>';
     for (const month of months) {
       const option = document.createElement('option');
       option.value = month;
       option.textContent = month.replace('-', '年') + '月';
-      monthFilter.appendChild(option);
+      selectEl.appendChild(option);
     }
 
     if (current === 'all' || months.includes(current)) {
-      monthFilter.value = current;
+      selectEl.value = current;
     } else {
-      monthFilter.value = 'all';
+      selectEl.value = 'all';
     }
+  }
+
+  function renderMonthFilterOptions() {
+    renderMonthFilterOptionsFor(monthFilter, getPersonalExpenses());
+    renderMonthFilterOptionsFor(sharedMonthFilter, getSharedExpenses());
   }
 
   function typeOf(record) {
@@ -1897,6 +1909,9 @@
       row: chartRow,
       empty: chartEmpty,
     });
+  });
+
+  sharedMonthFilter.addEventListener('change', () => {
     renderSharedSection();
   });
 
