@@ -448,13 +448,27 @@
     gap: 8px;
     margin-bottom: 16px;
   }
+  .name-option-row {
+    display: flex;
+    gap: 8px;
+  }
   .name-option-btn {
+    flex: 1;
     background: linear-gradient(135deg, #FFF0DE, #FFE3C2);
     color: var(--primary-dark);
     padding: 12px;
     border-radius: 14px;
     font-size: 1rem;
     font-weight: 700;
+    text-align: left;
+  }
+  .name-edit-btn {
+    background: #fff;
+    border: 2px solid var(--border);
+    color: var(--primary-dark);
+    width: 46px;
+    border-radius: 14px;
+    font-size: 1.1rem;
   }
   .name-new-row {
     display: flex;
@@ -518,7 +532,7 @@
       <input type="text" id="name-new-input" placeholder="新しく名前を登録">
       <button type="button" id="name-new-submit">決定</button>
     </div>
-    <p class="full-note" id="name-full-note" style="display:none;">すでに2人分登録されています。上の名前から選んでください。</p>
+    <p class="full-note" id="name-full-note" style="display:none;">すでに2人分登録されています。上から選ぶか、✏️で名前を変更してください。</p>
   </div>
 </div>
 
@@ -1070,24 +1084,100 @@
     personalListHeading.textContent = (currentPerson || '個人') + 'の記録一覧';
   }
 
+  let renamingOldName = null;
+
+  function resetNameForm() {
+    renamingOldName = null;
+    nameNewInput.value = '';
+    nameNewSubmit.textContent = '決定';
+    const canAddNew = people.length < 2;
+    nameNewRow.style.display = canAddNew ? 'flex' : 'none';
+    nameFullNote.style.display = canAddNew ? 'none' : 'block';
+  }
+
   function openNameModal() {
     nameOptionList.innerHTML = '';
     for (const name of people) {
+      const row = document.createElement('div');
+      row.className = 'name-option-row';
+
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'name-option-btn';
       btn.textContent = name;
       btn.addEventListener('click', () => selectPerson(name));
-      nameOptionList.appendChild(btn);
+
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'name-edit-btn';
+      editBtn.textContent = '✏️';
+      editBtn.addEventListener('click', () => startRenaming(name));
+
+      row.appendChild(btn);
+      row.appendChild(editBtn);
+      nameOptionList.appendChild(row);
     }
-    const canAddNew = people.length < 2;
-    nameNewRow.style.display = canAddNew ? 'flex' : 'none';
-    nameFullNote.style.display = canAddNew ? 'none' : 'block';
+    resetNameForm();
     nameModalOverlay.style.display = 'flex';
   }
 
   function closeNameModal() {
     nameModalOverlay.style.display = 'none';
+  }
+
+  function startRenaming(oldName) {
+    renamingOldName = oldName;
+    nameNewInput.value = oldName;
+    nameNewSubmit.textContent = '名前を変更する';
+    nameNewRow.style.display = 'flex';
+    nameFullNote.style.display = 'none';
+    nameNewInput.focus();
+  }
+
+  function persistRenamedRecords(records) {
+    if (expensesCollection) {
+      const batch = db.batch();
+      for (const record of records) {
+        batch.set(expensesCollection.doc(String(record.id)), record);
+      }
+      batch.commit().catch((err) => {
+        console.error('Firestore rename update failed', err);
+        persistExpenses();
+        render();
+      });
+    } else {
+      persistExpenses();
+      render();
+    }
+  }
+
+  function renamePerson(oldName, newName) {
+    if (newName !== oldName && people.includes(newName)) {
+      // Avoid merging two people into one slot.
+      return;
+    }
+
+    if (newName !== oldName) {
+      const newPeople = people.map((p) => (p === oldName ? newName : p));
+      persistPeople(newPeople);
+
+      const affected = expenses.filter((e) => e.person === oldName);
+      for (const record of affected) {
+        record.person = newName;
+      }
+      if (affected.length > 0) {
+        persistRenamedRecords(affected);
+      }
+
+      if (currentPerson === oldName) {
+        currentPerson = newName;
+        persistPersonLocal(newName);
+      }
+    }
+
+    closeNameModal();
+    renderPersonUI();
+    render();
   }
 
   function selectPerson(name) {
@@ -1104,6 +1194,12 @@
   nameNewSubmit.addEventListener('click', () => {
     const name = nameNewInput.value.trim();
     if (!name) return;
+
+    if (renamingOldName) {
+      renamePerson(renamingOldName, name);
+      return;
+    }
+
     if (people.length >= 2 && !people.includes(name)) return;
     nameNewInput.value = '';
     nameNewInput.blur();
