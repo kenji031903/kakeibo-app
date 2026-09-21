@@ -152,6 +152,28 @@
     font-weight: 700;
   }
 
+  .receipt-scan-btn {
+    display: block;
+    width: 100%;
+    background: #fff8f0;
+    color: var(--primary-dark);
+    font-size: 0.88rem;
+    font-weight: 700;
+    padding: 12px;
+    text-align: center;
+    border: 1.5px dashed var(--primary);
+    border-radius: 14px;
+  }
+  .receipt-scan-btn:active { transform: scale(0.98); }
+  .receipt-scan-btn:disabled { opacity: 0.6; }
+  .receipt-status {
+    display: none;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 6px;
+    text-align: center;
+  }
+
   .category-manage-list {
     max-height: 240px;
     overflow-y: auto;
@@ -732,6 +754,11 @@
       <p class="shared-warning" id="shared-warning" style="display:none;"></p>
       <input type="hidden" id="type" value="支出">
       <div class="full">
+        <button type="button" id="receipt-scan-btn" class="receipt-scan-btn">📷 レシートを撮影して自動入力</button>
+        <input type="file" id="receipt-input" accept="image/*" capture="environment" style="display:none;">
+        <p id="receipt-status" class="receipt-status"></p>
+      </div>
+      <div class="full">
         <label for="amount">金額(円)</label>
         <input type="number" id="amount" min="0" step="1" placeholder="1000" required>
       </div>
@@ -1037,6 +1064,9 @@
   const dateInput = document.getElementById('date');
   const memoInput = document.getElementById('memo');
   const submitBtn = document.getElementById('submit-btn');
+  const receiptScanBtn = document.getElementById('receipt-scan-btn');
+  const receiptInput = document.getElementById('receipt-input');
+  const receiptStatus = document.getElementById('receipt-status');
   const sharedWarning = document.getElementById('shared-warning');
   const monthFilter = document.getElementById('month-filter');
   const sharedMonthFilter = document.getElementById('shared-month-filter');
@@ -1293,14 +1323,112 @@
     }
   });
 
+  function setFormType(type) {
+    typeInput.value = type;
+    typeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b.dataset.type === type));
+    sharedHint.style.display = type === '2人の支出' ? 'block' : 'none';
+    renderCategoryGrid();
+    updateSharedAvailability();
+  }
+
   typeToggle.querySelectorAll('.type-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      typeInput.value = btn.dataset.type;
-      typeToggle.querySelectorAll('.type-btn').forEach((b) => b.classList.toggle('active', b === btn));
-      sharedHint.style.display = btn.dataset.type === '2人の支出' ? 'block' : 'none';
-      renderCategoryGrid();
-      updateSharedAvailability();
-    });
+    btn.addEventListener('click', () => setFormType(btn.dataset.type));
+  });
+
+  let tesseractLoadPromise = null;
+  function loadTesseract() {
+    if (window.Tesseract) return Promise.resolve();
+    if (!tesseractLoadPromise) {
+      tesseractLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('load failed'));
+        document.head.appendChild(script);
+      });
+    }
+    return tesseractLoadPromise;
+  }
+
+  const RECEIPT_CATEGORY_KEYWORDS = [
+    { name: '医療費', words: ['病院', 'クリニック', '歯科', '調剤', '診療'] },
+    { name: '食費', words: ['コンビニ', 'セブン-イレブン', 'セブンイレブン', 'ファミリーマート', 'ローソン', 'ミニストップ', 'スーパー', 'イオン', 'イトーヨーカドー', '西友', 'まいばすけっと', '業務スーパー', '弁当', '食堂', 'レストラン', 'カフェ', 'スターバックス', 'マクドナルド', 'ケンタッキー', '吉野家', 'すき家', 'なか卯', 'サイゼリヤ', 'ガスト', '定食'] },
+    { name: '日用品', words: ['ドラッグ', 'ダイソー', 'セリア', 'キャンドゥ', 'ホームセンター', '無印良品', 'ニトリ', '薬局', 'マツモトキヨシ', 'ウエルシア', 'ツルハ', 'スギ薬品', 'サンドラッグ', 'コスモス薬品'] },
+    { name: '交通費', words: ['タクシー', 'JR', '地下鉄', 'バス', 'ETC', 'ガソリン', '給油', '駐車場'] },
+    { name: '交際費', words: ['居酒屋', 'バー', 'スナック'] },
+    { name: '趣味・娯楽', words: ['映画', 'カラオケ', 'ゲーム', '書店', 'TSUTAYA', 'ジム'] },
+    { name: '住居・水道光熱費', words: ['電気', 'ガス料金', '水道', '家賃', 'NHK'] },
+  ];
+
+  function parseReceiptText(text) {
+    const normalized = text.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+
+    let amount = null;
+    const totalMatch = normalized.match(/(?:合計|合計金額|お会計|総額|total)[^\d]{0,8}([0-9,]{2,9})/i);
+    if (totalMatch) amount = Number(totalMatch[1].replace(/,/g, ''));
+    if (!amount) {
+      const yenMatches = [...normalized.matchAll(/([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,6})\s*円/g)];
+      if (yenMatches.length) {
+        amount = Math.max(...yenMatches.map((m) => Number(m[1].replace(/,/g, ''))));
+      }
+    }
+    if (!amount || !Number.isFinite(amount) || amount <= 0) amount = null;
+
+    let categoryName = null;
+    for (const entry of RECEIPT_CATEGORY_KEYWORDS) {
+      if (entry.words.some((w) => normalized.includes(w))) {
+        categoryName = entry.name;
+        break;
+      }
+    }
+
+    const firstLine = normalized
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length >= 2 && l.length <= 20 && !/^[0-9\-\s]+$/.test(l));
+
+    return { amount, categoryName, memo: firstLine ? firstLine.slice(0, 20) : '' };
+  }
+
+  receiptScanBtn.addEventListener('click', () => receiptInput.click());
+
+  receiptInput.addEventListener('change', async () => {
+    const file = receiptInput.files[0];
+    receiptInput.value = '';
+    if (!file) return;
+
+    receiptScanBtn.disabled = true;
+    receiptStatus.style.display = 'block';
+    receiptStatus.textContent = '📷 レシートを読み取り中...(数十秒かかることがあります)';
+
+    try {
+      await loadTesseract();
+      const { data } = await Tesseract.recognize(file, 'jpn+eng');
+      const { amount, categoryName, memo } = parseReceiptText(data.text || '');
+
+      setFormType('支出');
+      if (amount) amountInput.value = amount;
+      if (categoryName) {
+        const match = getCategoriesForType('支出').find((c) => c.name === categoryName);
+        if (match) {
+          categoryInput.value = match.name;
+          renderCategoryGrid();
+        }
+      }
+      if (memo) memoInput.value = memo;
+
+      receiptStatus.textContent = amount
+        ? '✅ 読み取りました。内容を確認して「追加する」を押してください。'
+        : '⚠️ 金額をうまく読み取れませんでした。手入力で確認してください。';
+    } catch (err) {
+      console.error('receipt OCR failed', err);
+      receiptStatus.textContent = '⚠️ 読み取りに失敗しました。もう一度お試しください。';
+    } finally {
+      receiptScanBtn.disabled = false;
+      setTimeout(() => {
+        receiptStatus.style.display = 'none';
+      }, 6000);
+    }
   });
 
   let recurringType = '支出';
