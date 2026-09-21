@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kakeibo-cache-v1';
+const CACHE_NAME = 'kakeibo-cache-v2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -29,16 +29,18 @@ self.addEventListener('fetch', (event) => {
   // Never intercept Firebase/Firestore requests; they need to hit the network directly.
   if (url.origin !== self.location.origin) return;
 
+  // Network-first: always prefer the latest deployed file when online, so a new
+  // push shows up on the next reload instead of being stuck behind a stale cache.
+  // Only fall back to the cache when the network is unavailable (offline).
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
+    fetch(event.request)
+      .then((response) => {
         if (response.ok) {
           const clone = response.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         }
         return response;
-      }).catch(() => cached);
-    })
+      })
+      .catch(() => caches.match(event.request))
   );
 });
