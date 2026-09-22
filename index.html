@@ -279,6 +279,7 @@
   .import-review-list {
     max-height: 320px;
     overflow-y: auto;
+    overflow-x: hidden;
     border: 1px solid var(--border);
     border-radius: 12px;
     padding: 2px 10px;
@@ -292,15 +293,19 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 3px;
+    margin-bottom: 4px;
+  }
+  .import-row-date {
+    margin: 0 0 4px 24px;
   }
   .import-date {
-    flex-shrink: 0;
+    box-sizing: border-box;
     font-size: 0.72rem;
     padding: 3px 4px;
     border: 1px solid var(--border);
     border-radius: 6px;
-    width: 120px;
+    width: 100%;
+    max-width: 150px;
   }
   .import-cat {
     color: #fff;
@@ -722,9 +727,9 @@
     inset: 0;
     background: rgba(120, 65, 20, 0.5);
     display: flex;
-    align-items: center;
     justify-content: center;
     padding: 20px;
+    overflow-y: auto;
     z-index: 100;
   }
   .name-modal {
@@ -734,6 +739,8 @@
     max-width: 360px;
     width: 100%;
     box-shadow: 0 20px 50px -12px rgba(225, 122, 46, 0.4);
+    margin: auto 0;
+    overflow-x: hidden;
   }
   .name-modal h2 { margin-top: 0; }
   .name-modal p {
@@ -1990,13 +1997,16 @@
   function renderScreenshotReviewList() {
     screenshotReviewList.innerHTML = '';
     screenshotRows.forEach((row, idx) => {
+      if (row.included === undefined) row.included = true;
       const el = document.createElement('div');
       el.className = 'import-row';
       el.innerHTML = `
         <div class="import-row-top">
-          <input type="checkbox" class="import-check" data-idx="${idx}" checked>
-          <input type="date" class="import-date" data-idx="${idx}" value="${row.date}">
+          <input type="checkbox" class="import-check" data-idx="${idx}" ${row.included ? 'checked' : ''}>
           <span class="import-cat" style="background:${colorForCategory(row.category)}">${iconForCategory(row.category)} ${escapeHtml(row.category)}</span>
+        </div>
+        <div class="import-row-date">
+          <input type="date" class="import-date" data-idx="${idx}" value="${row.date}">
         </div>
         <div class="import-row-bottom">
           <span class="import-memo">${escapeHtml(row.memo || '')}</span>
@@ -2006,6 +2016,12 @@
       screenshotReviewList.appendChild(el);
     });
     screenshotReviewCount.textContent = `${screenshotRows.length}件の記録を検出`;
+
+    screenshotReviewList.querySelectorAll('.import-check').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        screenshotRows[Number(cb.dataset.idx)].included = cb.checked;
+      });
+    });
 
     screenshotReviewList.querySelectorAll('.import-date').forEach((input) => {
       input.addEventListener('change', () => {
@@ -2041,6 +2057,7 @@
     const allChecked = boxes.length > 0 && boxes.every((b) => b.checked);
     boxes.forEach((b) => {
       b.checked = !allChecked;
+      screenshotRows[Number(b.dataset.idx)].included = b.checked;
     });
   });
 
