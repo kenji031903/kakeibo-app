@@ -254,6 +254,82 @@
     text-align: center;
   }
 
+  .import-btn {
+    display: block;
+    width: 100%;
+    background: #fff8f0;
+    color: var(--primary-dark);
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 12px;
+    text-align: center;
+    border: 1.5px dashed var(--primary);
+    border-radius: 14px;
+  }
+  .import-btn:active { transform: scale(0.98); }
+  .import-btn:disabled { opacity: 0.6; }
+  .import-status {
+    display: none;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-top: 6px;
+    text-align: center;
+  }
+
+  .import-review-list {
+    max-height: 320px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2px 10px;
+  }
+  .import-row {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .import-row:last-child { border-bottom: none; }
+  .import-row-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+  }
+  .import-date {
+    flex-shrink: 0;
+    font-size: 0.72rem;
+    padding: 3px 4px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    width: 120px;
+  }
+  .import-cat {
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 999px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+  .import-row-bottom {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding-left: 24px;
+    font-size: 0.78rem;
+  }
+  .import-memo {
+    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .import-amount { font-weight: 700; white-space: nowrap; }
+
   .category-manage-list {
     max-height: 240px;
     overflow-y: auto;
@@ -909,6 +985,26 @@
   </div>
 </div>
 
+<div id="screenshot-review-modal-overlay" class="name-modal-overlay" style="display:none;">
+  <div class="name-modal">
+    <h2>スクショの読み取り結果を確認</h2>
+    <p style="font-size:0.78rem; color:var(--muted); margin:-6px 0 10px;">
+      カテゴリ・金額・日付を自動で読み取りました。間違っている項目は修正するか、チェックを外してから登録してください。
+    </p>
+    <label for="screenshot-review-month">年月</label>
+    <input type="month" id="screenshot-review-month" style="margin-bottom:10px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <span style="font-size:0.78rem; color:var(--muted);" id="screenshot-review-count"></span>
+      <button type="button" id="screenshot-review-toggle-all" class="cat-manage-link" style="padding:0;">全て選択/解除</button>
+    </div>
+    <div id="screenshot-review-list" class="import-review-list"></div>
+    <label style="margin-top:12px;">チェックした項目をこのカテゴリに変更</label>
+    <div class="category-grid" id="screenshot-review-category-grid"></div>
+    <button type="button" id="screenshot-review-save" class="submit-btn" style="margin-top:12px;">選択した項目を登録する</button>
+    <button type="button" id="screenshot-review-close" class="cat-manage-link" style="margin-top:10px; width:100%; text-align:center;">閉じる</button>
+  </div>
+</div>
+
 <button type="button" id="calc-tab" class="calc-tab" aria-label="電卓を開く">🧮</button>
 <div id="calc-backdrop" class="calc-backdrop"></div>
 <div id="calc-panel" class="calc-panel">
@@ -971,6 +1067,11 @@
       </p>
       <p class="shared-warning" id="shared-warning" style="display:none;"></p>
       <input type="hidden" id="type" value="支出">
+      <div class="full">
+        <button type="button" id="screenshot-import-btn" class="import-btn">🖼 スクショから読み込む(複数可)</button>
+        <input type="file" id="screenshot-import-input" accept="image/*" multiple style="display:none;">
+        <p id="screenshot-import-status" class="import-status"></p>
+      </div>
       <div class="full">
         <label for="amount">金額(円)</label>
         <input type="number" id="amount" min="0" step="1" placeholder="1000" required>
@@ -1377,6 +1478,18 @@
   const editDeleteBtn = document.getElementById('edit-delete');
   const editModalClose = document.getElementById('edit-modal-close');
 
+  const screenshotImportBtn = document.getElementById('screenshot-import-btn');
+  const screenshotImportInput = document.getElementById('screenshot-import-input');
+  const screenshotImportStatus = document.getElementById('screenshot-import-status');
+  const screenshotReviewModalOverlay = document.getElementById('screenshot-review-modal-overlay');
+  const screenshotReviewMonthInput = document.getElementById('screenshot-review-month');
+  const screenshotReviewList = document.getElementById('screenshot-review-list');
+  const screenshotReviewCategoryGrid = document.getElementById('screenshot-review-category-grid');
+  const screenshotReviewCount = document.getElementById('screenshot-review-count');
+  const screenshotReviewToggleAll = document.getElementById('screenshot-review-toggle-all');
+  const screenshotReviewSave = document.getElementById('screenshot-review-save');
+  const screenshotReviewClose = document.getElementById('screenshot-review-close');
+
   dateInput.value = new Date().toISOString().slice(0, 10);
 
   function baseCategoryName(name) {
@@ -1754,6 +1867,290 @@
       amountInput.value = Math.round(value);
     }
     closeCalc();
+  });
+
+  let importTesseractLoadPromise = null;
+  function loadImportTesseract() {
+    if (window.Tesseract) return Promise.resolve();
+    if (!importTesseractLoadPromise) {
+      importTesseractLoadPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('load failed'));
+        document.head.appendChild(script);
+      });
+    }
+    return importTesseractLoadPromise;
+  }
+
+  // 家計簿アプリのスクショ(他アプリの履歴一覧)を1行ずつ解析する。
+  // 「カテゴリ ...空白... 金額」が同じ行に、メモはその次の行に来る形式を想定。
+  const IMPORT_AMOUNT_RE = /[¥￥\\]\s*([0-9]{1,3}(?:[.,][0-9]{3})*|[0-9]+)\s*$/;
+  const IMPORT_DAY_PREFIX_RE = /^([0-9]{1,2})(?=\D)/;
+  const IMPORT_MONTH_HEADER_RE = /(20[0-9]{2})年\s*([0-9]{1,2})月/;
+  const JAPANESE_CHAR_RE = /[぀-ゟ゠-ヿ一-鿿]/;
+
+  function stripLeadingNonJapanese(text) {
+    const m = text.match(JAPANESE_CHAR_RE);
+    return m ? text.slice(m.index).trim() : '';
+  }
+
+  function parseImportScreenshotText(text, fallbackDay) {
+    const normalized = text.replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0));
+    const lines = normalized.split('\n');
+    const rows = [];
+    let currentDay = fallbackDay;
+
+    const monthMatch = normalized.match(IMPORT_MONTH_HEADER_RE);
+    const detectedMonth = monthMatch ? `${monthMatch[1]}-${monthMatch[2].padStart(2, '0')}` : null;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+
+      const amountMatch = line.match(IMPORT_AMOUNT_RE);
+      if (!amountMatch) continue;
+
+      let prefix = line.slice(0, amountMatch.index).trim();
+      if (!prefix) continue; // 金額だけの行(日別合計など)は記録ではないので無視
+
+      const dayMatch = prefix.match(IMPORT_DAY_PREFIX_RE);
+      if (dayMatch) {
+        const day = Number(dayMatch[1]);
+        const rest = prefix.slice(dayMatch[0].length);
+        const restStripped = stripLeadingNonJapanese(rest);
+        const junk = rest.slice(0, rest.length - restStripped.length);
+        // アイコンの跡と思われる短いノイズ(空白は列の間隔なので無視してよい)だけを数える。
+        const junkNonSpaceLen = junk.replace(/\s+/g, '').length;
+        // 日付らしき数字の直後がごく短いノイズ(アイコン跡)であれば新しい日付とみなす。
+        // ただし ":" を含む場合はアイコン誤認識(例:時計風ノイズ)である可能性が高いため除外する。
+        if (day >= 1 && day <= 31 && junkNonSpaceLen <= 6 && restStripped && !junk.includes(':')) {
+          currentDay = day;
+          prefix = restStripped;
+        }
+      }
+
+      const category = stripLeadingNonJapanese(prefix);
+      if (!category) continue; // 読み取れなかった・アイコンノイズのみの行は破棄
+
+      const amount = Number(amountMatch[1].replace(/[.,]/g, ''));
+      if (!amount || amount <= 0) continue;
+
+      let memo = '';
+      const nextLine = (lines[i + 1] || '').trim();
+      if (nextLine && !IMPORT_AMOUNT_RE.test(nextLine) && !IMPORT_DAY_PREFIX_RE.test(nextLine)) {
+        memo = nextLine.slice(0, 24);
+      }
+
+      rows.push({ day: currentDay, category: category.slice(0, 16), memo, amount });
+    }
+
+    return { rows, detectedMonth, lastDay: currentDay };
+  }
+
+  function matchImportCategory(ocrName, categories) {
+    let cat = categories.find((c) => c.name === ocrName);
+    if (!cat) {
+      cat = categories.find((c) => ocrName.includes(c.name) || c.name.includes(ocrName));
+    }
+    if (!cat) {
+      cat = categories.find((c) => c.name === 'その他') || categories[0];
+    }
+    return cat;
+  }
+
+  let screenshotRows = [];
+  let screenshotBatchMonth = '';
+  let screenshotCarryDay = null;
+
+  function renderScreenshotReviewCategoryGrid() {
+    const categories = getCategoriesForType('支出');
+    screenshotReviewCategoryGrid.innerHTML = '';
+    for (const cat of categories) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'category-btn';
+      btn.innerHTML = `
+        <span class="icon-circle" style="background:${cat.color}">${cat.icon}</span>
+        <span class="cat-label">${cat.name}</span>
+      `;
+      btn.addEventListener('click', () => {
+        const checked = [...screenshotReviewList.querySelectorAll('.import-check:checked')];
+        if (checked.length === 0) return;
+        checked.forEach((cb) => {
+          screenshotRows[Number(cb.dataset.idx)].category = cat.name;
+        });
+        renderScreenshotReviewList();
+      });
+      screenshotReviewCategoryGrid.appendChild(btn);
+    }
+  }
+
+  function renderScreenshotReviewList() {
+    screenshotReviewList.innerHTML = '';
+    screenshotRows.forEach((row, idx) => {
+      const el = document.createElement('div');
+      el.className = 'import-row';
+      el.innerHTML = `
+        <div class="import-row-top">
+          <input type="checkbox" class="import-check" data-idx="${idx}" checked>
+          <input type="date" class="import-date" data-idx="${idx}" value="${row.date}">
+          <span class="import-cat" style="background:${colorForCategory(row.category)}">${iconForCategory(row.category)} ${escapeHtml(row.category)}</span>
+        </div>
+        <div class="import-row-bottom">
+          <span class="import-memo">${escapeHtml(row.memo || '')}</span>
+          <span class="import-amount">¥${row.amount.toLocaleString()}</span>
+        </div>
+      `;
+      screenshotReviewList.appendChild(el);
+    });
+    screenshotReviewCount.textContent = `${screenshotRows.length}件の記録を検出`;
+
+    screenshotReviewList.querySelectorAll('.import-date').forEach((input) => {
+      input.addEventListener('change', () => {
+        screenshotRows[Number(input.dataset.idx)].date = input.value;
+      });
+    });
+  }
+
+  function recomputeScreenshotRowDates() {
+    for (const row of screenshotRows) {
+      if (row.day) {
+        row.date = `${screenshotBatchMonth}-${String(row.day).padStart(2, '0')}`;
+      }
+    }
+    renderScreenshotReviewList();
+  }
+
+  function openScreenshotReviewModal() {
+    renderScreenshotReviewCategoryGrid();
+    renderScreenshotReviewList();
+    screenshotReviewMonthInput.value = screenshotBatchMonth;
+    screenshotReviewModalOverlay.style.display = 'flex';
+  }
+
+  screenshotReviewMonthInput.addEventListener('change', () => {
+    if (!screenshotReviewMonthInput.value) return;
+    screenshotBatchMonth = screenshotReviewMonthInput.value;
+    recomputeScreenshotRowDates();
+  });
+
+  screenshotReviewToggleAll.addEventListener('click', () => {
+    const boxes = [...screenshotReviewList.querySelectorAll('.import-check')];
+    const allChecked = boxes.length > 0 && boxes.every((b) => b.checked);
+    boxes.forEach((b) => {
+      b.checked = !allChecked;
+    });
+  });
+
+  screenshotReviewClose.addEventListener('click', () => {
+    screenshotReviewModalOverlay.style.display = 'none';
+    screenshotRows = [];
+    screenshotBatchMonth = '';
+    screenshotCarryDay = null;
+  });
+
+  screenshotReviewSave.addEventListener('click', () => {
+    const checkedIdx = [...screenshotReviewList.querySelectorAll('.import-check:checked')].map((cb) =>
+      Number(cb.dataset.idx)
+    );
+    if (checkedIdx.length === 0) return;
+
+    const categories = getCategoriesForType('支出');
+    const idBase = Date.now();
+    const records = checkedIdx
+      .map((idx, i) => {
+        const row = screenshotRows[idx];
+        if (!row.date) return null;
+        const cat = matchImportCategory(row.category, categories);
+        return {
+          id: idBase + i,
+          amount: row.amount,
+          category: cat.name,
+          date: row.date,
+          type: '支出',
+          person: currentPerson,
+          memo: row.memo,
+        };
+      })
+      .filter(Boolean);
+
+    writeRecords(records);
+    screenshotReviewModalOverlay.style.display = 'none';
+    screenshotRows = [];
+    screenshotBatchMonth = '';
+    screenshotCarryDay = null;
+  });
+
+  screenshotImportBtn.addEventListener('click', () => screenshotImportInput.click());
+
+  screenshotImportInput.addEventListener('change', async () => {
+    const files = [...screenshotImportInput.files];
+    screenshotImportInput.value = '';
+    if (files.length === 0) return;
+
+    screenshotImportBtn.disabled = true;
+    screenshotImportStatus.style.display = 'block';
+
+    // 全ファイルを先に読み取ってから月を確定し、そのあとで日付を割り当てる。
+    // (月ヘッダーが写っているスクショが後から選ばれても、先に読んだ分の日付を誤らせないため)
+    const perFileResults = [];
+    let detectedMonth = null;
+
+    if (screenshotCarryDay == null) screenshotCarryDay = new Date().getDate();
+
+    for (let i = 0; i < files.length; i++) {
+      screenshotImportStatus.textContent = `📷 読み取り中...(${i + 1}/${files.length}枚)`;
+      try {
+        await loadImportTesseract();
+        const { data } = await Tesseract.recognize(files[i], 'jpn+eng');
+        // 直前のスクショで最後に確定した日付を、次のスクショの先頭(見出しが
+        // 見えていない項目)の初期値として引き継ぐ。スクロール順に選んだ場合に
+        // 精度が上がる。
+        const parsed = parseImportScreenshotText(data.text || '', screenshotCarryDay);
+        perFileResults.push(parsed);
+        if (parsed.detectedMonth && !detectedMonth) detectedMonth = parsed.detectedMonth;
+        screenshotCarryDay = parsed.lastDay;
+      } catch (err) {
+        console.error('screenshot OCR failed', err);
+      }
+    }
+
+    if (detectedMonth) {
+      screenshotBatchMonth = detectedMonth;
+    } else if (!screenshotBatchMonth) {
+      screenshotBatchMonth = new Date().toISOString().slice(0, 7);
+    }
+
+    for (const parsed of perFileResults) {
+      for (const row of parsed.rows) {
+        const date = `${screenshotBatchMonth}-${String(row.day).padStart(2, '0')}`;
+        // スクロールしながら複数枚撮ると境界の項目が重複しやすいので、
+        // 日付・カテゴリ・メモ・金額が完全一致するものは追加しない。
+        const isDuplicate = screenshotRows.some(
+          (r) => r.date === date && r.category === row.category && r.memo === row.memo && r.amount === row.amount
+        );
+        if (isDuplicate) continue;
+        screenshotRows.push({
+          ...row,
+          date,
+        });
+      }
+    }
+
+    screenshotImportStatus.style.display = 'none';
+    screenshotImportBtn.disabled = false;
+
+    if (screenshotRows.length > 0) {
+      openScreenshotReviewModal();
+    } else {
+      screenshotImportStatus.style.display = 'block';
+      screenshotImportStatus.textContent = '⚠️ 記録を読み取れませんでした。別のスクショで試してください。';
+      setTimeout(() => {
+        screenshotImportStatus.style.display = 'none';
+      }, 6000);
+    }
   });
 
   let recurringType = '支出';
