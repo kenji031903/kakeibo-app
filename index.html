@@ -254,6 +254,73 @@
     text-align: center;
   }
 
+  .fish-tab {
+    left: 0;
+    right: auto;
+    border-radius: 0 14px 14px 0;
+    box-shadow: 4px 4px 16px -6px rgba(255, 159, 90, 0.55);
+  }
+  .fish-tab.fish-fed-both {
+    background: linear-gradient(135deg, #6FBF73, #4C9950);
+  }
+  .fish-panel {
+    right: auto;
+    left: 12px;
+  }
+  .fish-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .fish-row:last-of-type { border-bottom: none; }
+  .fish-label { font-size: 0.92rem; font-weight: 700; color: var(--text); }
+  .fish-switch {
+    position: relative;
+    display: inline-block;
+    width: 46px;
+    height: 26px;
+    flex-shrink: 0;
+  }
+  .fish-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  .fish-switch-track {
+    position: absolute;
+    inset: 0;
+    background: var(--border);
+    border-radius: 999px;
+    transition: background 0.15s ease;
+    cursor: pointer;
+  }
+  .fish-switch-track::before {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    left: 3px;
+    top: 3px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.15s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+  .fish-switch input:checked + .fish-switch-track {
+    background: var(--primary);
+  }
+  .fish-switch input:checked + .fish-switch-track::before {
+    transform: translateX(20px);
+  }
+  .fish-note {
+    font-size: 0.72rem;
+    color: var(--muted);
+    margin: 10px 0 0;
+    text-align: center;
+  }
+
   .category-manage-list {
     max-height: 240px;
     overflow-y: auto;
@@ -945,6 +1012,30 @@
   <button type="button" id="calc-apply" class="calc-apply-btn">→ 金額欄に入力</button>
 </div>
 
+<button type="button" id="fish-tab" class="calc-tab fish-tab" aria-label="ごはんチェックを開く">🐟</button>
+<div id="fish-backdrop" class="calc-backdrop"></div>
+<div id="fish-panel" class="calc-panel fish-panel">
+  <div class="calc-panel-header">
+    <span>🐟 今日のごはん</span>
+    <button type="button" id="fish-close" class="calc-close-btn">×</button>
+  </div>
+  <div class="fish-row">
+    <span class="fish-label">🌅 朝ごはん</span>
+    <label class="fish-switch">
+      <input type="checkbox" id="fish-morning-toggle">
+      <span class="fish-switch-track"></span>
+    </label>
+  </div>
+  <div class="fish-row">
+    <span class="fish-label">🌙 夜ごはん</span>
+    <label class="fish-switch">
+      <input type="checkbox" id="fish-night-toggle">
+      <span class="fish-switch-track"></span>
+    </label>
+  </div>
+  <p class="fish-note">日付が変わると自動でリセットされます</p>
+</div>
+
 <div class="container">
   <h1>かんたん家計簿</h1>
   <div class="sync-status" id="sync-status">読み込み中...</div>
@@ -1583,6 +1674,13 @@
   const calcDisplay = document.getElementById('calc-display');
   const calcApply = document.getElementById('calc-apply');
 
+  const fishTab = document.getElementById('fish-tab');
+  const fishBackdrop = document.getElementById('fish-backdrop');
+  const fishPanel = document.getElementById('fish-panel');
+  const fishClose = document.getElementById('fish-close');
+  const fishMorningToggle = document.getElementById('fish-morning-toggle');
+  const fishNightToggle = document.getElementById('fish-night-toggle');
+
   let calcCurrent = '0';
   let calcPrevValue = null;
   let calcPendingOp = null;
@@ -1659,85 +1757,93 @@
     calcRender();
   }
 
-  const CALC_TAB_POS_KEY = 'kakeibo-calc-tab-top';
-  const CALC_TAB_MARGIN = 12;
+  const FLOATING_TAB_MARGIN = 12;
 
-  function clampCalcTabTop(top) {
-    const maxTop = window.innerHeight - calcTab.offsetHeight - CALC_TAB_MARGIN;
-    return Math.min(Math.max(top, CALC_TAB_MARGIN), Math.max(CALC_TAB_MARGIN, maxTop));
-  }
-
-  function loadCalcTabPosition() {
-    let top = window.innerHeight / 2 - calcTab.offsetHeight / 2;
-    try {
-      const saved = localStorage.getItem(CALC_TAB_POS_KEY);
-      if (saved != null) top = Number(saved);
-    } catch {
-      // ignore
+  // 電卓・ごはんチェックなど、右端/左端に半分隠れて縦にドラッグでき、
+  // タップでフローティングパネルが開くタブ共通のセットアップ。
+  function setupFloatingTab(tab, panel, backdrop, storageKey, onOpen) {
+    function clampTop(top) {
+      const maxTop = window.innerHeight - tab.offsetHeight - FLOATING_TAB_MARGIN;
+      return Math.min(Math.max(top, FLOATING_TAB_MARGIN), Math.max(FLOATING_TAB_MARGIN, maxTop));
     }
-    calcTab.style.top = clampCalcTabTop(top) + 'px';
-  }
-  loadCalcTabPosition();
 
-  window.addEventListener('resize', () => {
-    const current = parseFloat(calcTab.style.top) || 0;
-    calcTab.style.top = clampCalcTabTop(current) + 'px';
-  });
-
-  let calcDrag = null;
-
-  calcTab.addEventListener('pointerdown', (e) => {
-    calcDrag = { startY: e.clientY, startTop: calcTab.getBoundingClientRect().top, moved: false };
-    calcTab.setPointerCapture(e.pointerId);
-    calcTab.classList.add('dragging');
-  });
-
-  calcTab.addEventListener('pointermove', (e) => {
-    if (!calcDrag) return;
-    const dy = e.clientY - calcDrag.startY;
-    if (Math.abs(dy) > 4) calcDrag.moved = true;
-    calcTab.style.top = clampCalcTabTop(calcDrag.startTop + dy) + 'px';
-  });
-
-  function endCalcDrag() {
-    if (!calcDrag) return;
-    calcTab.classList.remove('dragging');
-    if (calcDrag.moved) {
+    function loadPosition() {
+      let top = window.innerHeight / 2 - tab.offsetHeight / 2;
       try {
-        localStorage.setItem(CALC_TAB_POS_KEY, String(parseFloat(calcTab.style.top)));
+        const saved = localStorage.getItem(storageKey);
+        if (saved != null) top = Number(saved);
       } catch {
         // ignore
       }
+      tab.style.top = clampTop(top) + 'px';
     }
-    calcTab.dataset.justDragged = calcDrag.moved ? '1' : '0';
-    calcDrag = null;
-  }
-  calcTab.addEventListener('pointerup', endCalcDrag);
-  calcTab.addEventListener('pointercancel', endCalcDrag);
+    loadPosition();
 
-  function openCalc() {
-    calcBackdrop.style.display = 'block';
-    calcPanel.style.display = 'block';
-    const tabRect = calcTab.getBoundingClientRect();
-    let top = tabRect.top + tabRect.height / 2 - calcPanel.offsetHeight / 2;
-    top = Math.min(Math.max(top, CALC_TAB_MARGIN), window.innerHeight - calcPanel.offsetHeight - CALC_TAB_MARGIN);
-    calcPanel.style.top = top + 'px';
-  }
+    window.addEventListener('resize', () => {
+      const current = parseFloat(tab.style.top) || 0;
+      tab.style.top = clampTop(current) + 'px';
+    });
 
-  function closeCalc() {
-    calcBackdrop.style.display = 'none';
-    calcPanel.style.display = 'none';
-  }
+    let drag = null;
 
-  calcTab.addEventListener('click', () => {
-    if (calcTab.dataset.justDragged === '1') {
-      calcTab.dataset.justDragged = '0';
-      return;
+    tab.addEventListener('pointerdown', (e) => {
+      drag = { startY: e.clientY, startTop: tab.getBoundingClientRect().top, moved: false };
+      tab.setPointerCapture(e.pointerId);
+      tab.classList.add('dragging');
+    });
+
+    tab.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const dy = e.clientY - drag.startY;
+      if (Math.abs(dy) > 4) drag.moved = true;
+      tab.style.top = clampTop(drag.startTop + dy) + 'px';
+    });
+
+    function endDrag() {
+      if (!drag) return;
+      tab.classList.remove('dragging');
+      if (drag.moved) {
+        try {
+          localStorage.setItem(storageKey, String(parseFloat(tab.style.top)));
+        } catch {
+          // ignore
+        }
+      }
+      tab.dataset.justDragged = drag.moved ? '1' : '0';
+      drag = null;
     }
-    openCalc();
-  });
-  calcClose.addEventListener('click', closeCalc);
-  calcBackdrop.addEventListener('click', closeCalc);
+    tab.addEventListener('pointerup', endDrag);
+    tab.addEventListener('pointercancel', endDrag);
+
+    function open() {
+      backdrop.style.display = 'block';
+      panel.style.display = 'block';
+      const tabRect = tab.getBoundingClientRect();
+      let top = tabRect.top + tabRect.height / 2 - panel.offsetHeight / 2;
+      top = Math.min(Math.max(top, FLOATING_TAB_MARGIN), window.innerHeight - panel.offsetHeight - FLOATING_TAB_MARGIN);
+      panel.style.top = top + 'px';
+      if (onOpen) onOpen();
+    }
+
+    function close() {
+      backdrop.style.display = 'none';
+      panel.style.display = 'none';
+    }
+
+    tab.addEventListener('click', () => {
+      if (tab.dataset.justDragged === '1') {
+        tab.dataset.justDragged = '0';
+        return;
+      }
+      open();
+    });
+    backdrop.addEventListener('click', close);
+
+    return { open, close };
+  }
+
+  const calcFloating = setupFloatingTab(calcTab, calcPanel, calcBackdrop, 'kakeibo-calc-tab-top');
+  calcClose.addEventListener('click', calcFloating.close);
 
   calcPanel.querySelectorAll('.calc-grid button').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -1757,8 +1863,66 @@
     if (Number.isFinite(value) && value > 0) {
       amountInput.value = Math.round(value);
     }
-    closeCalc();
+    calcFloating.close();
   });
+
+  const FISH_KEY = 'kakeibo-fish-feeding';
+
+  function todayStr() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function loadFishLocal() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(FISH_KEY));
+      if (raw && typeof raw.date === 'string') return raw;
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+  function persistFishLocal(data) {
+    try {
+      localStorage.setItem(FISH_KEY, JSON.stringify(data));
+    } catch {
+      // ignore
+    }
+  }
+
+  let fishState = loadFishLocal() || { date: todayStr(), morning: false, night: false };
+  let fishDoc = null;
+
+  // 保存されている日付が今日でなければ、表示上は両方未実施として扱う
+  // (実際のデータはトグル操作した瞬間に今日の日付で書き込まれ、そこで初めてリセットが確定する)。
+  function getDisplayFishState() {
+    if (fishState.date !== todayStr()) return { morning: false, night: false };
+    return { morning: Boolean(fishState.morning), night: Boolean(fishState.night) };
+  }
+
+  function renderFishState() {
+    const display = getDisplayFishState();
+    fishMorningToggle.checked = display.morning;
+    fishNightToggle.checked = display.night;
+    fishTab.classList.toggle('fish-fed-both', display.morning && display.night);
+  }
+  renderFishState();
+
+  function setFishFed(period, value) {
+    const display = getDisplayFishState();
+    display[period] = value;
+    fishState = { date: todayStr(), morning: display.morning, night: display.night };
+    persistFishLocal(fishState);
+    if (fishDoc) {
+      fishDoc.set(fishState).catch((err) => console.error('fish feeding write failed', err));
+    }
+    renderFishState();
+  }
+
+  fishMorningToggle.addEventListener('change', () => setFishFed('morning', fishMorningToggle.checked));
+  fishNightToggle.addEventListener('change', () => setFishFed('night', fishNightToggle.checked));
+
+  const fishFloating = setupFloatingTab(fishTab, fishPanel, fishBackdrop, 'kakeibo-fish-tab-top', renderFishState);
+  fishClose.addEventListener('click', fishFloating.close);
 
   let recurringType = '支出';
   let editingRecurringId = null;
@@ -2231,6 +2395,7 @@
       peopleDoc = db.collection('meta').doc('people');
       categoriesDoc = db.collection('meta').doc('categories');
       recurringDoc = db.collection('meta').doc('recurring');
+      fishDoc = db.collection('meta').doc('fishFeeding');
 
       expensesCollection.onSnapshot(
         (snapshot) => {
@@ -2291,6 +2456,20 @@
         },
         (error) => {
           console.error('recurring sync error', error);
+        }
+      );
+
+      fishDoc.onSnapshot(
+        (doc) => {
+          const data = doc.data();
+          if (data && typeof data.date === 'string') {
+            fishState = { date: data.date, morning: Boolean(data.morning), night: Boolean(data.night) };
+            persistFishLocal(fishState);
+          }
+          renderFishState();
+        },
+        (error) => {
+          console.error('fish feeding sync error', error);
         }
       );
     } catch (err) {
