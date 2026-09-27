@@ -1385,6 +1385,19 @@
   const sharedWarning = document.getElementById('shared-warning');
   const monthFilter = document.getElementById('month-filter');
   const sharedMonthFilter = document.getElementById('shared-month-filter');
+
+  // 開いた直後は「すべての期間」ではなく今月をデフォルトで表示する。
+  (function setDefaultMonthFilters() {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const label = currentMonth.replace('-', '年') + '月';
+    for (const select of [monthFilter, sharedMonthFilter]) {
+      const option = document.createElement('option');
+      option.value = currentMonth;
+      option.textContent = label;
+      select.appendChild(option);
+      select.value = currentMonth;
+    }
+  })();
   const listBody = document.getElementById('expense-list');
   const incomeEl = document.getElementById('income-amount');
   const expenseEl = document.getElementById('expense-amount');
@@ -2510,7 +2523,8 @@
   }
 
   function renderMonthFilterOptionsFor(selectEl, records) {
-    const months = [...new Set(records.map((e) => monthOf(e.date)))].sort().reverse();
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const months = [...new Set([currentMonth, ...records.map((e) => monthOf(e.date))])].sort().reverse();
     const current = selectEl.value;
 
     selectEl.innerHTML = '<option value="all">すべての期間</option>';
