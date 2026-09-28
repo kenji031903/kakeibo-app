@@ -676,7 +676,15 @@
     gap: 10px;
     font-size: 0.85rem;
     margin-bottom: 6px;
+    cursor: pointer;
   }
+  .budget-row-arrow {
+    display: inline-block;
+    font-size: 0.65rem;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  .budget-row-arrow.expanded { transform: rotate(90deg); }
   .budget-row-name {
     font-weight: 700;
     color: var(--text);
@@ -706,6 +714,28 @@
     background: var(--primary);
   }
   .budget-row-fill.over-budget { background: var(--danger); }
+  .budget-row-detail {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+  }
+  .budget-detail-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    font-size: 0.78rem;
+    padding: 3px 0;
+    color: var(--text);
+  }
+  .budget-detail-date {
+    color: var(--muted);
+    margin-right: 6px;
+  }
+  .budget-detail-empty {
+    font-size: 0.78rem;
+    color: var(--muted);
+    padding: 4px 0;
+  }
   .budget-card .empty { padding: 16px 0; }
 
   .name-modal-overlay {
@@ -3009,6 +3039,8 @@
     renderCalendar();
   });
 
+  let expandedBudgetCategories = new Set();
+
   function renderBudgetSummary() {
     const currentMonth = new Date().toISOString().slice(0, 7);
     const [y, m] = currentMonth.split('-').map(Number);
@@ -3018,9 +3050,12 @@
       (e) => monthOf(e.date) === currentMonth && typeOf(e) === '支出'
     );
     const totalsByCategory = new Map();
+    const recordsByCategory = new Map();
     for (const record of monthRecords) {
       const base = baseCategoryName(record.category);
       totalsByCategory.set(base, (totalsByCategory.get(base) || 0) + record.amount);
+      if (!recordsByCategory.has(base)) recordsByCategory.set(base, []);
+      recordsByCategory.get(base).push(record);
     }
 
     const budgeted = EXPENSE_CATEGORIES.filter((c) => c.budget);
@@ -3036,19 +3071,44 @@
       const spent = totalsByCategory.get(cat.name) || 0;
       const over = spent > cat.budget;
       const percent = Math.min(100, Math.round((spent / cat.budget) * 100));
+      const expanded = expandedBudgetCategories.has(cat.name);
+      const items = (recordsByCategory.get(cat.name) || []).sort(
+        (a, b) => b.date.localeCompare(a.date) || b.id - a.id
+      );
+      const detailHtml = items.length
+        ? items
+            .map(
+              (r) => `
+                <div class="budget-detail-item">
+                  <span><span class="budget-detail-date">${r.date.slice(5).replace('-', '/')}</span>${escapeHtml(r.memo || r.category)}</span>
+                  <span>¥${r.amount.toLocaleString()}</span>
+                </div>
+              `
+            )
+            .join('')
+        : '<div class="budget-detail-empty">この月の記録はまだありません</div>';
 
       const row = document.createElement('div');
       row.className = 'budget-row';
       row.innerHTML = `
-        <div class="budget-row-top">
-          <span class="budget-row-name">${cat.icon} ${escapeHtml(cat.name)}</span>
+        <div class="budget-row-top" data-cat="${escapeHtml(cat.name)}">
+          <span class="budget-row-name">${cat.icon} ${escapeHtml(cat.name)} <span class="budget-row-arrow${expanded ? ' expanded' : ''}">▸</span></span>
           <span class="budget-row-values">
             <span class="budget-row-target">目標 ${formatYen(cat.budget)}</span>
             <span class="budget-row-actual${over ? ' over-budget' : ''}">支出 ${formatYen(spent)}${over ? ' ⚠️' : ''}</span>
           </span>
         </div>
         <div class="budget-row-bar"><div class="budget-row-fill${over ? ' over-budget' : ''}" style="width:${percent}%"></div></div>
+        <div class="budget-row-detail" style="display:${expanded ? 'block' : 'none'}">${detailHtml}</div>
       `;
+      row.querySelector('.budget-row-top').addEventListener('click', () => {
+        if (expandedBudgetCategories.has(cat.name)) {
+          expandedBudgetCategories.delete(cat.name);
+        } else {
+          expandedBudgetCategories.add(cat.name);
+        }
+        renderBudgetSummary();
+      });
       budgetSummaryList.appendChild(row);
     }
   }
