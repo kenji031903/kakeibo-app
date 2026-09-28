@@ -1045,7 +1045,10 @@
   </div>
 
   <div class="card budget-card">
-    <h2 style="margin:0 0 4px;">🎯 今月の目標</h2>
+    <div style="display:flex; justify-content:space-between; align-items:baseline; gap:8px;">
+      <h2 style="margin:0 0 4px;">🎯 今月の目標</h2>
+      <button type="button" id="budget-summary-edit-btn" class="cat-manage-link" style="padding:0; white-space:nowrap;">目標を編集する</button>
+    </div>
     <p class="budget-month-label" id="budget-month-label"></p>
     <div id="budget-summary-list"></div>
     <div class="empty" id="budget-summary-empty" style="display:none;">
@@ -1425,6 +1428,7 @@
   const budgetSummaryList = document.getElementById('budget-summary-list');
   const budgetSummaryEmpty = document.getElementById('budget-summary-empty');
   const budgetSummaryEmptyBtn = document.getElementById('budget-summary-empty-btn');
+  const budgetSummaryEditBtn = document.getElementById('budget-summary-edit-btn');
 
   const sharedListBody = document.getElementById('shared-list');
   const sharedEmpty = document.getElementById('shared-empty');
@@ -3050,6 +3054,7 @@
   }
 
   budgetSummaryEmptyBtn.addEventListener('click', openCategoryModal);
+  budgetSummaryEditBtn.addEventListener('click', openCategoryModal);
 
   function render() {
     renderMonthFilterOptions();
